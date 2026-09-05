@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ihca
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: node server.js
+    envVars:
+      - key: ROOM
+        value: "2468"        # 固定房間代碼，想換就在 Render 後台改
+      - key: TKEY
+        generateValue: true  # 教師金鑰，Render 會自動產生一組

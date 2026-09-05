@@ -1,0 +1,1527 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>IHCA 團隊復甦</title>
+<style>
+:root{--bg:#0A0F14;--card:#141C24;--line:#26333F;--ink:#DCE6EE;--dim:#8296A8;
+ --ecg:#25E06B;--co2:#F5C542;--cy:#3FD0E8;--rd:#FF5566;--gold:#E8B84B;
+ --sans:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+ --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+ overflow:hidden;touch-action:none;overscroll-behavior:none}
+#app{height:100dvh;display:flex;flex-direction:column}
+button{font-family:var(--sans);font-size:14px;color:var(--ink);background:#1F2C38;border:1px solid #384956;
+ border-radius:10px;padding:10px 8px;cursor:pointer;min-width:0;min-height:54px;font-weight:500;
+ display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3}
+button:active{background:#2C3D4C}
+button:disabled{opacity:.28}
+button.hot{background:#8A2530;border-color:#C0454F;color:#fff}
+button.go{background:#1B5E45;border-color:#2E8A67}
+button.warn{background:#8A6417;border-color:#C09A2E;color:#fff}
+button.lead{background:#6B4C0E;border-color:#D6AC3A;color:#fff}
+button.talk{background:#173845;border-color:#2F6C82}
+button.wide{grid-column:1 / -1}
+button.ghost{font-size:12px;padding:8px 10px;min-height:42px;background:#161F27}
+
+/* ── 監視器 ── */
+#mon{flex:none;background:#000;border-bottom:1px solid var(--line);display:flex;height:66px}
+body.mode-host #mon{height:112px}
+.mch{flex:1;position:relative;min-width:0;border-right:1px solid #141C24;padding:3px 0 0 8px}
+.mch:last-child{border-right:none}
+.mch .k{font-family:var(--mono);font-size:10px;letter-spacing:.05em}
+body.mode-host .mch .k{font-size:14px}
+.mch .v{font-family:var(--mono);font-size:23px;font-weight:500;line-height:1;margin-top:1px}
+body.mode-host .mch .v{font-size:40px}
+.mch canvas{position:absolute;left:0;bottom:1px;width:100%;height:38px}
+body.mode-host .mch canvas{height:66px}
+#alm{flex:none;width:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+ font-family:var(--mono);font-size:11px;color:var(--rd);text-align:center;line-height:1.25;gap:3px}
+body.mode-host #alm{width:96px;font-size:19px}
+#alm .sub{font-size:8.5px;color:var(--dim);letter-spacing:.04em}
+body.mode-host #alm .sub{font-size:12px}
+
+/* ── 場地 ── */
+#field{flex:1;position:relative;min-height:0;background:#0D1319}
+#cv{position:absolute;inset:0;width:100%;height:100%}
+#hud{position:absolute;left:9px;top:6px;font-family:var(--mono);pointer-events:none;z-index:3}
+#hud .t{font-size:21px;font-weight:500;color:#EAF2F8;line-height:1;text-shadow:0 2px 8px #000}
+#hud .s{font-size:10px;color:#9FB2C2;margin-top:3px;text-shadow:0 1px 4px #000}
+body.mode-host #hud .t{font-size:30px}body.mode-host #hud .s{font-size:13px}
+#ord{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:6;
+ background:rgba(150,118,30,.97);color:#fff;padding:9px 13px;border-radius:11px;
+ display:none;align-items:center;gap:10px;max-width:92%;box-shadow:0 5px 18px rgba(0,0,0,.45)}
+#ord.on{display:flex}
+#ord .x{flex:1;font-size:15px;font-weight:700;line-height:1.35}
+body.mode-host #ord .x{font-size:26px}
+#ord button{flex:0 0 auto;min-width:0;min-height:0;font-size:12px;padding:8px 12px;
+ background:#12301F;border-color:#2E8A67;border-radius:8px}
+#feed{position:absolute;right:6px;top:54px;bottom:8px;width:40%;max-width:230px;z-index:4;
+ display:flex;flex-direction:column;gap:5px;pointer-events:none;overflow:hidden;justify-content:flex-end}
+body.mode-host #feed{max-width:400px;width:34%}
+#feed .f{background:rgba(10,18,26,.86);border-left:3px solid #3FD0E8;border-radius:7px;
+ padding:5px 8px;font-size:12px;line-height:1.4;color:#D6E2EC}
+body.mode-host #feed .f{font-size:18px;padding:8px 12px}
+#feed .f.new{animation:slideIn .3s ease-out}
+#feed .f b{font-weight:700;margin-right:5px}
+#feed .f.big{background:rgba(22,80,100,.93);font-size:13px;border-left-color:#8FE3F5}
+body.mode-host #feed .f.big{font-size:21px}
+@keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+.tb{position:absolute;top:6px;font-size:11px;padding:7px 9px;min-height:0;min-width:0;
+ background:rgba(20,28,36,.92);border:1px solid var(--line);border-radius:8px;flex:none;z-index:5}
+#mode{right:8px}#spd{right:88px}#pausebtn{right:158px}
+#pausebtn.on{background:#7A4A12;border-color:#C09A2E;color:#fff}
+#toast{position:absolute;left:50%;top:60px;transform:translateX(-50%);background:rgba(8,13,18,.95);
+ border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:13px;pointer-events:none;
+ opacity:0;transition:opacity .2s;max-width:88%;text-align:center;line-height:1.45;z-index:7}
+#toast.on{opacity:1}
+#toast.priv{border-color:#3D6E80;background:rgba(10,26,34,.96)}
+#toast .pv{display:block;font-size:10px;letter-spacing:.1em;color:var(--cy);margin-bottom:2px}
+/* 浮動搖桿：手指按在病房畫面的任何地方就會長出來 */
+#stick{position:absolute;width:128px;height:128px;margin:-64px 0 0 -64px;border-radius:50%;
+ background:rgba(14,26,34,.34);border:2px solid rgba(120,170,195,.45);display:none;
+ touch-action:none;pointer-events:none;z-index:5}
+#stick.on{display:block}
+#knob{position:absolute;left:41px;top:41px;width:46px;height:46px;border-radius:50%;
+ background:rgba(120,215,240,.7);border:2px solid rgba(230,248,255,.8);pointer-events:none;
+ box-shadow:0 0 14px rgba(63,208,232,.5)}
+#field{touch-action:none}
+/* 你現在站在哪裡 — 因為學員看的是大螢幕，不會盯著手機 */
+#youare{position:sticky;top:0;z-index:2;background:linear-gradient(#141C24,#141C24 78%,rgba(20,28,36,0));
+ padding:2px 2px 9px;margin:-2px -2px 4px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+#youare .st{font-size:19px;font-weight:700;color:#EAF2F8;letter-spacing:.04em}
+#youare .st.on{color:#7FE0A8}
+#youare .hd{font-size:12.5px;color:var(--dim)}
+#youare .hd b{color:#8FE3F5}
+#youare .me{font-size:13px;font-weight:700;padding:2px 9px;border-radius:7px;background:#1D2C38}
+#strip{position:absolute;left:8px;right:8px;top:44px;z-index:8;display:none;
+ background:rgba(4,10,14,.96);border:1px solid #2E4450;border-radius:12px;padding:8px 10px 6px;
+ box-shadow:0 8px 30px rgba(0,0,0,.6)}
+#strip.on{display:block}
+#strip .sl{display:flex;justify-content:space-between;align-items:baseline;
+ font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:3px}
+#strip .sl b{color:#EAF2F8;font-size:13px;letter-spacing:.05em}
+body.mode-host #strip .sl b{font-size:22px}
+#strip .sl .cd{color:var(--gold)}
+#cStrip{width:100%;height:104px;display:block}
+body.mode-host #cStrip{height:190px}
+#strip .sn{font-size:11px;color:#7C8F9F;margin-top:3px;line-height:1.5}
+body.mode-host #strip .sn{font-size:16px}
+
+/* ── 角色列（單機／主機） ── */
+#who{flex:none;display:flex;gap:4px;padding:5px 6px;background:#0E151C;border-top:1px solid var(--line);height:54px}
+body.mode-host #who{height:82px}
+#who .w{flex:1;min-width:0;border:1px solid #2B3945;border-radius:9px;padding:5px 3px;text-align:center;
+ background:#151E27;cursor:pointer;position:relative}
+#who .w.sel{border-color:var(--cy);background:#1D2C38}
+#who .w.ld{box-shadow:inset 0 0 0 1px var(--gold)}
+#who .w.off{opacity:.4}
+#who .w .n{font-size:14px;font-weight:700;line-height:1.15}
+body.mode-host #who .w .n{font-size:26px}
+#who .w .b{font-size:9px;color:var(--dim);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.mode-host #who .w .b{font-size:14px}
+#who .w .d{position:absolute;left:50%;transform:translateX(-50%);top:2px;width:5px;height:5px;border-radius:50%}
+#who .w .cr{position:absolute;right:3px;top:1px;font-size:9px;color:var(--gold)}
+
+/* ── 動作面板 ── */
+#panel{flex:none;background:var(--card);border-top:1px solid var(--line);
+ padding:7px 9px calc(7px + env(safe-area-inset-bottom));
+ height:250px;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;align-content:start}
+.sec{grid-column:1 / -1;display:flex;align-items:center;gap:9px;margin:9px 0 1px;
+ font-size:10px;letter-spacing:.16em;color:var(--dim)}
+.sec:first-child{margin-top:0}
+.sec i{flex:1;height:1px;background:#26333F;display:block}
+.sec.t1{color:#7FE0A8}.sec.t2{color:#6FC8DE}.sec.t3{color:#6C7E8C}
+.held{grid-column:1 / -1;background:#16232E;border:1px solid #2C4150;border-radius:8px;
+ padding:7px 10px;font-size:13px;color:#A8BECE}
+.held b{color:#EAF2F8}
+.hint{color:var(--dim);font-size:12.5px;padding:3px 2px;line-height:1.5;grid-column:1 / -1}
+.bad{color:#FF8A93}.good{color:#6FE0A6}
+.cnt{grid-column:1 / -1;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.cnt b{font-family:var(--mono);font-size:30px;line-height:1;color:#FFF}
+.fat{flex:1;height:8px;background:#0E151B;border-radius:4px;overflow:hidden}
+.fat i{display:block;height:100%}
+.cl{border-left:3px solid var(--cy);padding:5px 0 5px 10px;margin:0 0 9px;font-size:13.5px;line-height:1.55;grid-column:1 / -1}
+.cl b{display:block;font-size:10.5px;color:var(--cy);margin-bottom:2px;font-weight:500}
+
+/* ── 進場 / 大廳 ── */
+#gate{position:fixed;inset:0;background:#0A0F14;z-index:30;overflow-y:auto;touch-action:pan-y;
+ padding:26px 18px 40px;display:none}
+#gate.on{display:block}
+#gate .inner{max-width:520px;margin:0 auto}
+#gate h1{font-size:22px;font-weight:500;margin:0 0 6px;letter-spacing:.02em}
+#gate p{color:var(--dim);font-size:13.5px;line-height:1.65;margin:0 0 14px}
+#gate .lab{font-size:11px;letter-spacing:.12em;color:var(--dim);margin:20px 0 8px}
+#nameIn{width:100%;font-size:44px;text-align:center;padding:14px;border-radius:14px;
+ background:#141C24;border:1px solid #34485A;color:#fff;font-family:var(--sans);letter-spacing:.3em}
+#nameIn:focus{outline:2px solid var(--cy)}
+#slots{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+#slots button{min-height:76px;flex-direction:column;gap:4px;font-size:12px}
+#slots button .dot{width:22px;height:22px;border-radius:50%}
+#slots button.taken{opacity:.42}
+#slots button.on{border-color:var(--cy);background:#1D3543}
+.big-url{font-family:var(--mono);font-size:clamp(20px,5vw,44px);color:#8FE3F5;
+ background:#0E1A22;border:1px solid #26414F;border-radius:14px;padding:16px;text-align:center;
+ word-break:break-all;line-height:1.35}
+
+/* ── 教師控制台 ── */
+#tc{position:fixed;inset:0;background:#080D11;z-index:12;overflow-y:auto;touch-action:pan-y;
+ padding:16px 16px 40px;display:none}
+#tc.on{display:block}
+#tc .inner{max-width:620px;margin:0 auto}
+#tc h2{font-size:17px;font-weight:500;margin:22px 0 8px;color:#CFDCE6}
+#tc h2:first-child{margin-top:0}
+#tc .g{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#tc .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+#tc .g button,#tc .g3 button{min-height:52px;font-size:13.5px;flex-direction:column;gap:2px}
+#tc button.on{border-color:var(--cy);background:#1D3543;color:#fff}
+#tc .note{font-size:12px;color:var(--dim);line-height:1.6;margin:8px 0 0}
+#tc .roster{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px}
+#tc .roster div{background:#141C24;border:1px solid #26333F;border-radius:9px;padding:8px 4px;
+ text-align:center;font-size:20px;font-weight:700}
+#tc .roster div small{display:block;font-size:9px;color:var(--dim);font-weight:400;margin-top:3px}
+#tc .roster div.off{opacity:.35}
+
+/* ── 報表 ── */
+#sheet{position:fixed;inset:0;background:#060A0E;z-index:18;padding:18px 16px 40px;
+ overflow:auto;display:none;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#sheet.on{display:block}
+#sheet .inner{max-width:620px;margin:0 auto}
+#sheet h3{margin:0 0 4px;font-size:22px;font-weight:500;text-align:center}
+#sheet .sub{margin:0 0 16px;color:var(--dim);font-size:13px;text-align:center}
+#sheet h4{font-size:11px;letter-spacing:.14em;color:var(--cy);margin:22px 0 6px;font-weight:500;
+ border-bottom:1px solid #1B2A33;padding-bottom:5px}
+.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #16202A;font-size:13.5px;gap:14px}
+.row span:first-child{color:var(--dim)}
+.row span:last-child{font-family:var(--mono);color:#EAF2F8;text-align:right;white-space:pre-line}
+.row.ok span:last-child{color:#6FE0A6}
+.row.no span:last-child{color:#FF8A93}
+.tlr{display:flex;gap:9px;font-size:12.5px;line-height:1.55;padding:2.5px 0;color:#B9C9D6}
+.tlr .tt{font-family:var(--mono);color:#5F7183;flex:none;width:44px}
+.tlr.key{color:#EAF2F8}.tlr.key .tt{color:var(--cy)}
+.talkr{display:flex;gap:8px;font-size:12.5px;line-height:1.6;padding:2.5px 0;color:#B9C9D6}
+.talkr .tt{font-family:var(--mono);color:#5F7183;flex:none;width:44px}
+.talkr b{flex:none;margin-right:2px}
+#swim{width:100%;display:block;border-radius:8px;background:#080E12;border:1px solid #1B2A33}
+.legend{display:flex;flex-wrap:wrap;gap:5px 14px;margin:8px 0 0;font-size:11px;color:var(--dim)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+#sheet .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:22px}
+#sheet .btns button{min-height:48px;font-size:13.5px}
+
+/* ── 重播列 ── */
+#rp{flex:none;background:#0E151C;border-top:1px solid var(--line);padding:8px 12px 12px;display:none}
+body.mode-replay #rp{display:block}
+#rp .r1{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+#rp .r1 button{min-height:40px;padding:6px 12px;font-size:13px}
+#rp .tm{font-family:var(--mono);font-size:15px;color:#EAF2F8;min-width:96px}
+#rp input[type=range]{width:100%;accent-color:#3FD0E8}
+#rp .r2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--dim)}
+#rp .r2 button{min-height:34px;padding:5px 10px;font-size:12px}
+#rp .r2 button.on{border-color:var(--cy);background:#1D3543;color:#fff}
+
+body.mode-player #who{display:none}
+body.mode-player #field{flex:0 0 auto;aspect-ratio:900/780;max-height:44vh}
+body.mode-player #toast{top:auto;bottom:8px}
+body.mode-player #panel{flex:1;height:auto;min-height:0}
+body.mode-host #panel,body.mode-host #stick,body.mode-host .tb{display:none}
+body.mode-teacher #panel,body.mode-teacher #who{display:none}
+body.mode-replay #panel{display:none}
+</style>
+<body>
+<div id="app">
+ <div id="mon">
+  <div id="alm">ASYS<span class="sub"></span></div>
+  <div class="mch"><div class="k" style="color:var(--ecg)">II</div><div class="v" id="vHR" style="color:var(--ecg)">‑‑</div><canvas id="cEcg"></canvas></div>
+  <div class="mch"><div class="k" style="color:var(--co2)">EtCO₂</div><div class="v" id="vCo" style="color:var(--co2)">‑‑</div><canvas id="cCo2"></canvas></div>
+  <div class="mch"><div class="k" style="color:var(--cy)">SpO₂</div><div class="v" id="vSp" style="color:var(--cy)">‑‑</div></div>
+  <div class="mch"><div class="k" style="color:var(--rd)">NIBP</div><div class="v" id="vBP" style="color:var(--rd);font-size:13px;margin-top:6px">未測量</div></div>
+ </div>
+ <div id="field">
+  <canvas id="cv"></canvas>
+  <div id="ord"><span class="x" id="ordx"></span><button id="ordb">收到</button></div>
+  <div id="feed"></div>
+  <div id="hud"><div class="t" id="clk">‑‑:‑‑</div><div class="s" id="sub"></div></div>
+  <button class="tb" id="pausebtn">⏸ 暫停</button>
+  <button class="tb" id="spd">速度 1×</button>
+  <button class="tb" id="mode">點選移動</button>
+  <div id="toast"></div>
+  <div id="stick"><div id="knob"></div></div>
+  <div id="strip">
+    <div class="sl"><b id="stripT">心律判讀</b><span class="cd" id="stripC"></span></div>
+    <canvas id="cStrip"></canvas>
+    <div class="sn" id="stripN"></div>
+  </div>
+ </div>
+ <div id="who"></div>
+ <div id="panel"><div id="youare"></div><div id="acts"></div></div>
+ <div id="rp">
+   <div class="r1">
+     <button id="rpPlay">▶</button>
+     <span class="tm" id="rpTime">00:00 / 00:00</span>
+     <input type="range" id="rpSeek" min="0" max="1000" value="0">
+   </div>
+   <div class="r2">
+     <span>速度</span>
+     <button class="rpS" data-v="1">1×</button><button class="rpS on" data-v="2">2×</button>
+     <button class="rpS" data-v="4">4×</button><button class="rpS" data-v="8">8×</button>
+     <span style="margin-left:10px">視角</span><span id="rpEyes"></span>
+     <button id="rpReport" style="margin-left:auto">報表</button>
+   </div>
+ </div>
+</div>
+<div id="gate"></div>
+<div id="tc"></div>
+<div id="sheet"></div>
+<script src="ihca-sim.js"></script>
+<script src="qr.js"></script>
+<script>
+'use strict';
+const K=IHCA.K, RH=IHCA.RH, mmt=IHCA.mmt;
+const $=id=>document.getElementById(id);
+const QS=new URLSearchParams(location.search);
+const isFile=location.protocol==='file:';
+let MODE=QS.get('m')||(isFile?'solo':'player');
+if(MODE==='replay'&&!isFile){}
+document.body.className='mode-'+MODE;
+
+/* 這台裝置操作的角色（多人版＝自己；單機版＝目前選到的人） */
+let ME=null;
+let G=null;                      /* 要畫的狀態 */
+let LOBBY=null;
+let sub=null, mode='tap', speed=1, toastT=0, jact=false;
+let ettScope='Direct', ettBlade='3 號';
+let SOLO=(MODE==='solo'), REPLAY=(MODE==='replay');
+let ROOM=QS.get('r')||localStorage.getItem('ihcaRoom')||'';
+let TKEY=QS.get('k')||'';
+let DENIED=null;
+const studentURL=()=>location.origin+location.pathname.replace(/[^/]*$/,'')+'?r='+ROOM;
+function qrSVG(text,px){try{return QR.svg(text,px||6,'#0A0F14','#FFFFFF');}
+  catch(e){return '<div style="color:#FF8A93">QR 產生失敗</div>';}}
+
+/* ═══════════ 網路 ═══════════ */
+const NET={ws:null,ok:false,queue:[],
+  connect(){
+    if(isFile||SOLO||REPLAY)return;
+    const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+    const ws=new WebSocket(url);NET.ws=ws;
+    ws.onopen=()=>{NET.ok=true;NET.hello();};
+    ws.onclose=()=>{NET.ok=false;setTimeout(NET.connect,1500);};
+    ws.onerror=()=>{};
+    ws.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch(_){return;}NET.recv(m);};
+  },
+  hello(){
+    if(MODE==='host'||MODE==='teacher'){NET.send({t:'hello',role:MODE,key:TKEY});return;}
+    if(!ROOM){DENIED='room';paintGate();return;}
+    const nm=localStorage.getItem('ihcaName')||'';
+    if(!nm){NET.send({t:'hello',role:'lobby',room:ROOM});return;}  /* 還沒填名字＝先不要佔位子 */
+    NET.send({t:'hello',role:'player',name:nm,slot:localStorage.getItem('ihcaSlot')||'',room:ROOM});
+  },
+  send(o){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(o));},
+  act(a,p){if(SOLO||REPLAY){soloAct(a,p);return;}NET.send({t:'act',act:a,p:p||{}});},
+  recv(m){
+    if(m.t==='welcome'){ME=m.slot;DENIED=null;
+      if(m.room){ROOM=m.room;localStorage.setItem('ihcaRoom',m.room);}
+      if(m.key)TKEY=m.key;
+      if(ME)localStorage.setItem('ihcaSlot',ME);}
+    else if(m.t==='denied'){DENIED=m.need;ME=null;_lastGate='';paintGate();}
+    else if(m.t==='snap'){G=m.s;afterSnap();}
+    else if(m.t==='lobby'){LOBBY=m;paintGate();paintTC();}
+    else if(m.t==='log'){for(const e of m.e)toast(e.m,e.p);}
+    else if(m.t==='history'){HIST=m.h;renderSheet();}
+    else if(m.t==='recording'){downloadRec(m.rec);}
+    else if(m.t==='full'){alert('六個位子都滿了。');}
+  }};
+let HIST=null;
+
+/* ═══════════ 單機／重播用的本地模擬 ═══════════ */
+let LOCAL=null, REC=null;
+function soloNew(setup){
+  const seed=(Math.random()*0xFFFFFFFF)>>>0;
+  LOCAL=IHCA.newState(seed,setup||{});
+  REC={v:3,seed,setup:setup||{},events:[]};
+  G=LOCAL;ME=ME||'a';
+}
+function soloAct(a,p){
+  if(!LOCAL||REPLAY)return;
+  if(IHCA.applyAct(LOCAL,ME,a,p))REC.events.push({k:LOCAL.tick,c:ME,a,p:p||null});
+  paint();
+}
+function soloCtl(a,p){
+  if(!LOCAL)return;
+  if(IHCA.applyAct(LOCAL,null,a,p))REC.events.push({k:LOCAL.tick,c:null,a,p:p||null});
+}
+
+/* ═══════════ 通用 ═══════════ */
+const C=id=>G&&G.ch.find(c=>c.id===id);
+const meC=()=>C(ME);
+function nearSt(c){let b=null,d=1e9;for(const k in K.ST){const s=K.ST[k],dd=Math.hypot(c.x-s.x,c.y-s.y-26);
+  if(dd<d){d=dd;b=k}}return d<88?b:null;}
+function nearEq(c){let b=null,d=1e9;for(const k in G.eq){const e=G.eq[k],dd=Math.hypot(c.x-e.x,c.y-e.y);
+  if(dd<d){d=dd;b=k}}return d<112?b:null;}
+const atSideC=c=>['bedL','bedR'].includes(nearSt(c));
+const compressingG=()=>!!(G&&G.cpr&&!G.pauseVent&&!G.holdCpr&&G.check<=0);
+const clearOnG=()=>G&&G.t-G.clearAt<10;
+function toast(m,priv){const e=$('toast');
+  e.innerHTML=(priv?'<span class="pv">只有你知道</span>':'')+m;
+  e.classList.toggle('priv',!!priv);e.classList.add('on');toastT=3.6;}
+
+/* ═══════════ 病房繪圖 ═══════════ */
+const BEDC=K.BED;
+const _sm={};
+function smooth(c,dt){
+  let s=_sm[c.id];
+  if(!s||Math.hypot(s.x-c.x,s.y-c.y)>260)s=_sm[c.id]={x:c.x,y:c.y};
+  const k=Math.min(1,dt*16);s.x+=(c.x-s.x)*k;s.y+=(c.y-s.y)*k;return s;
+}
+let _rc=null,_rcN=0,_lastFrame=0;
+function drawWard(cx,cv,meId){
+  if(!G)return;
+  const W=K.W,H=K.H;
+  const now=performance.now(),fdt=Math.min(.06,(now-_lastFrame)/1000||.016);_lastFrame=now;
+  const CH=(SOLO||REPLAY)?G.ch:G.ch.map(c=>{const s=smooth(c,fdt);return Object.assign({},c,{x:s.x,y:s.y});});
+  if(!_rc||++_rcN>30){_rc=cv.getBoundingClientRect();_rcN=0;}
+  const r=_rc,dpr=devicePixelRatio||1;
+  if(cv.width!==Math.round(r.width*dpr)){cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);}
+  cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,r.width,r.height);
+  const sc=Math.min(r.width/W,r.height/H);
+  cx.translate((r.width-W*sc)/2,(r.height-H*sc)/2);cx.scale(sc,sc);
+  const A=G.anim;
+
+  const rr=(x,y,w,h,rad)=>{cx.beginPath();cx.moveTo(x+rad,y);cx.arcTo(x+w,y,x+w,y+h,rad);
+    cx.arcTo(x+w,y+h,x,y+h,rad);cx.arcTo(x,y+h,x,y,rad);cx.arcTo(x,y,x+w,y,rad);cx.closePath();};
+  const shadow=(x,y,rx)=>{cx.fillStyle='rgba(20,30,40,.18)';cx.beginPath();
+    cx.ellipse(x,y,rx,rx*.34,0,0,6.3);cx.fill();};
+  const plate=(x,y,txt,bg,fg,fs)=>{fs=fs||14;cx.font='700 '+fs+'px sans-serif';cx.textAlign='center';
+    const w=cx.measureText(txt).width+18;cx.fillStyle=bg;rr(x-w/2,y-fs-4,w,fs+10,7);cx.fill();
+    cx.fillStyle=fg;cx.fillText(txt,x,y);};
+
+  cx.fillStyle='#E6E3DB';cx.fillRect(0,0,W,H);
+  cx.strokeStyle='#D8D4CA';cx.lineWidth=1.5;
+  for(let i=0;i<=W;i+=75){cx.beginPath();cx.moveTo(i,0);cx.lineTo(i,H);cx.stroke();}
+  for(let i=0;i<=H;i+=75){cx.beginPath();cx.moveTo(0,i);cx.lineTo(W,i);cx.stroke();}
+  cx.fillStyle='#B9C6CE';cx.fillRect(0,0,W,62);
+  cx.fillStyle='#8FB6C9';rr(560,13,236,36,6);cx.fill();
+  cx.fillStyle='#A7B6BF';cx.fillRect(0,62,W,6);
+
+  (function(){
+    const tot=K.WALL.h*3600+K.WALL.m*60+Math.floor(G.t||0);
+    const hh=String(Math.floor(tot/3600)%24).padStart(2,'0');
+    const mi=String(Math.floor(tot/60)%60).padStart(2,'0');
+    const X=W-58,Y=52;
+    cx.fillStyle='#F4F2EC';cx.beginPath();cx.arc(X,Y,26,0,6.3);cx.fill();
+    cx.strokeStyle='#8A949C';cx.lineWidth=3;cx.stroke();
+    cx.fillStyle='#39434B';cx.font='700 16px sans-serif';cx.textAlign='center';
+    cx.fillText(hh+':'+mi,X,Y+6);
+    if(G.timeShown>0){
+      const t=Math.floor(G.t),m2=String(Math.floor(t/60)).padStart(2,'0'),s2=String(t%60).padStart(2,'0');
+      cx.fillStyle='rgba(46,116,146,.92)';rr(560,13,236,36,6);cx.fill();
+      cx.fillStyle='#EAF6FA';cx.font='700 19px sans-serif';cx.textAlign='center';
+      cx.fillText('急救 '+m2+':'+s2,678,38);}
+  })();
+
+  for(const k in K.ST){const s=K.ST[k],ld=k==='foot';
+    cx.strokeStyle=ld?'rgba(180,150,60,.62)':'rgba(120,130,135,.28)';
+    cx.lineWidth=ld?3:2;cx.setLineDash([9,7]);
+    rr(s.x-s.w/2,s.y-s.h/2,s.w,s.h,11);cx.stroke();cx.setLineDash([]);
+    let nm=s.n;
+    if(ld)nm=G.leader?('床尾 · Leader：'+C(G.leader).n):'床尾 · 還沒有人宣告 Leader';
+    plate(s.x,s.y-s.h/2-7,nm,ld?'rgba(150,118,30,.95)':'rgba(228,226,218,.95)',ld?'#fff':'#48535E',13);}
+
+  shadow(BEDC.cx,BEDC.cy+BEDC.h/2+6,BEDC.w/2+12);
+  cx.fillStyle='#B9C1C4';rr(BEDC.cx-BEDC.w/2,BEDC.cy-BEDC.h/2+BEDC.h*.5,BEDC.w,BEDC.h*.55,12);cx.fill();
+  cx.fillStyle='#F1F3F2';rr(BEDC.cx-BEDC.w/2,BEDC.cy-BEDC.h/2,BEDC.w,BEDC.h,12);cx.fill();
+  cx.fillStyle='#DAE2E6';rr(BEDC.cx-56,BEDC.cy-BEDC.h/2+9,112,34,8);cx.fill();
+  cx.fillStyle='#E8C9AC';cx.beginPath();cx.arc(BEDC.cx,BEDC.cy-BEDC.h/2+44,19,0,6.3);cx.fill();
+  cx.fillStyle='#CBD8DE';rr(BEDC.cx-38,BEDC.cy-BEDC.h/2+68,76,140,34);cx.fill();
+  plate(BEDC.cx,BEDC.cy-BEDC.h/2-16,G.patient,'rgba(70,84,96,.92)','#EDF3F7',12);
+
+  const px=BEDC.cx+BEDC.w/2+26, py=BEDC.cy+BEDC.h/2-24;
+  shadow(px,py+6,16);
+  cx.strokeStyle='#9AA6B0';cx.lineWidth=4;
+  cx.beginPath();cx.moveTo(px-14,py+4);cx.lineTo(px+14,py+4);cx.stroke();
+  cx.beginPath();cx.moveTo(px,py+4);cx.lineTo(px,py-126);cx.stroke();
+  cx.beginPath();cx.moveTo(px-11,py-126);cx.lineTo(px+11,py-126);cx.stroke();
+  cx.fillStyle='#8A96A0';cx.beginPath();cx.arc(px-11,py-126,3.5,0,6.3);cx.fill();
+  cx.beginPath();cx.arc(px+11,py-126,3.5,0,6.3);cx.fill();
+  if(G.iv||G.ivFixed){
+    cx.fillStyle=G.ivFixed?'rgba(158,220,244,.96)':'rgba(178,192,202,.75)';
+    rr(px+2,py-120,26,44,7);cx.fill();
+    cx.fillStyle='rgba(255,255,255,.45)';rr(px+5,py-116,8,30,4);cx.fill();
+    if(G.ivFixed){cx.strokeStyle='rgba(130,200,230,.92)';cx.lineWidth=2.5;cx.beginPath();
+      cx.moveTo(px+15,py-76);cx.quadraticCurveTo(px+6,py-40,BEDC.cx+28,BEDC.cy+34);cx.stroke();
+      plate(px+40,py-128,G.ivRoute||'IV','rgba(30,110,140,.94)','#fff',11);}}
+
+  if(G.air!=='BVM'){const ok=G.air==='ETT',ty=BEDC.cy-BEDC.h/2+44;
+    cx.strokeStyle=ok?'#2FB6D8':'#E0555F';cx.lineWidth=8;cx.lineCap='round';
+    cx.beginPath();cx.moveTo(BEDC.cx,ty+4);cx.lineTo(BEDC.cx-46,ty-24);cx.stroke();cx.lineCap='butt';
+    cx.fillStyle=ok?'#7FD8E8':'#F09098';cx.beginPath();cx.arc(BEDC.cx-52,ty-28,9,0,6.3);cx.fill();
+    plate(BEDC.cx-78,ty-46,ok?'已插管':'管路位置不對',
+      ok?'rgba(30,130,160,.95)':'rgba(180,50,60,.95)','#fff',12);}
+
+  const on=compressingG();
+  const chy=BEDC.cy-6, w=Math.sin(A*11.5), hs=on?1+w*.12:1;
+  cx.fillStyle=on?'rgba(242,112,75,.9)':'rgba(140,152,162,.55)';
+  rr(BEDC.cx-19*hs,chy-13*hs,17*hs,26*hs,6);cx.fill();
+  rr(BEDC.cx+2*hs,chy-13*hs,17*hs,26*hs,6);cx.fill();
+  if(on){cx.strokeStyle='rgba(242,112,75,.75)';cx.lineWidth=3.5;cx.beginPath();
+    cx.arc(BEDC.cx,chy,30+w*5,0,6.3);cx.stroke();}
+  if(G.rosc&&!on){const bb=Math.abs(Math.sin(A*(G.roscHR/60)*3.14));
+    cx.strokeStyle='rgba(90,210,140,'+(.35+bb*.5)+')';cx.lineWidth=3;cx.beginPath();
+    cx.arc(BEDC.cx,chy,26+bb*8,0,6.3);cx.stroke();}
+  plate(BEDC.cx,BEDC.cy+BEDC.h/2-8,
+    G.check>0?'心律檢查中 · 全部停手':G.pauseVent?'等通氣 '+G.breaths+'/2':
+      G.holdCpr?'等壓胸的人按繼續':on?'壓胸中 '+G.cnt+' 下':
+      G.phase==='post'?'ROSC 後照護中':'壓胸停止',
+    G.check>0?'rgba(70,86,102,.96)':G.pauseVent?'rgba(196,138,28,.96)':
+      G.holdCpr?'rgba(150,110,30,.96)':on?'rgba(214,92,58,.96)':
+      G.phase==='post'?'rgba(30,130,90,.96)':'rgba(150,60,66,.96)','#fff',14);
+  if(clearOnG()&&!G.over)
+    plate(BEDC.cx,BEDC.cy-BEDC.h/2-40,'⚡ CLEAR — 壓胸的人放手','rgba(200,50,58,.97)','#fff',16);
+
+  const ico={
+    cart:(x,y,s)=>{cx.fillStyle='rgba(255,255,255,.95)';rr(x-s*.16,y-s*.5,s*.32,s,5);cx.fill();
+      rr(x-s*.5,y-s*.16,s,s*.32,5);cx.fill();},
+    defib:(x,y,s)=>{cx.fillStyle='rgba(255,255,255,.96)';cx.beginPath();
+      cx.moveTo(x+s*.16,y-s*.52);cx.lineTo(x-s*.34,y+s*.08);cx.lineTo(x-s*.04,y+s*.08);
+      cx.lineTo(x-s*.16,y+s*.52);cx.lineTo(x+s*.34,y-s*.08);cx.lineTo(x+s*.04,y-s*.08);
+      cx.closePath();cx.fill();},
+    echo:(x,y,s)=>{cx.fillStyle='rgba(255,255,255,.95)';rr(x-s*.2,y-s*.5,s*.4,s*.5,s*.14);cx.fill();
+      cx.beginPath();cx.moveTo(x-s*.3,y);cx.lineTo(x+s*.3,y);cx.lineTo(x+s*.2,y+s*.16);
+      cx.lineTo(x-s*.2,y+s*.16);cx.closePath();cx.fill();
+      cx.strokeStyle='rgba(255,255,255,.75)';cx.lineWidth=s*.07;
+      for(let i=1;i<=2;i++){cx.beginPath();cx.arc(x,y+s*.16,s*.16*i+s*.08,.25,2.89);cx.stroke();}},
+    pc:(x,y,s)=>{cx.fillStyle='rgba(255,255,255,.94)';rr(x-s*.42,y-s*.4,s*.84,s*.56,5);cx.fill();
+      cx.fillStyle='rgba(90,102,114,.95)';rr(x-s*.36,y-s*.34,s*.72,s*.44,3);cx.fill();
+      cx.fillStyle='rgba(255,255,255,.94)';rr(x-s*.2,y+s*.18,s*.4,s*.1,3);cx.fill();}};
+  for(const k in G.eq){const e=G.eq[k];
+    shadow(e.x,e.y+e.h/2+4,e.w/2-4);
+    cx.fillStyle=e.dark;rr(e.x-e.w/2,e.y-e.h/2+e.h*.56,e.w,e.h*.5,8);cx.fill();
+    cx.fillStyle=e.col;rr(e.x-e.w/2,e.y-e.h/2,e.w,e.h,8);cx.fill();
+    ico[k](e.x,e.y,Math.min(e.w,e.h)*.86);
+    plate(e.x,e.y-e.h/2-9,e.n,'rgba(16,24,32,.93)','#F2F7FA',15);
+    if(k==='defib'&&G.df.charged)plate(e.x,e.y+e.h/2+22,'已充電 '+G.df.j+'J','rgba(196,60,70,.96)','#fff',12);}
+
+  for(const c of CH){
+    if(c.hold==='paddle'||c.hold==='probe'){
+      const k=c.hold==='paddle'?'defib':'echo',e=G.eq[k];
+      const ok=Math.hypot(c.x-e.x,c.y-e.y)<=e.cable;
+      cx.strokeStyle=ok?'rgba(70,90,105,.7)':'rgba(224,85,95,.92)';
+      cx.lineWidth=3;cx.setLineDash(ok?[]:[6,5]);cx.beginPath();
+      cx.moveTo(e.x,e.y);cx.quadraticCurveTo((e.x+c.x)/2,Math.max(e.y,c.y)+34,c.x,c.y-14);
+      cx.stroke();cx.setLineDash([]);}}
+  for(const c of CH)if(c.hold==='ett'&&(G.air==='BVM'||G.air==='bad')){
+    const h=CH.find(o=>o!==c&&nearSt(o)==='head'&&Math.hypot(o.x-c.x,o.y-c.y)<165);
+    if(h)plate((c.x+h.x)/2,Math.min(c.y,h.y)-78,'器材已備妥 · 床頭可插管','rgba(30,110,80,.96)','#fff',13);}
+
+  if(G.family&&!G.family.gone){
+    const fam=G.family, sw=Math.sin(A*3.9)*7, fy=fam.y+Math.abs(Math.sin(A*3.4))*-4;
+    shadow(fam.x+sw,fam.y+3,17);
+    cx.save();cx.translate(fam.x+sw,fy);cx.rotate(Math.sin(A*3.9)*.09);
+    cx.fillStyle='#C08A6B';rr(-14,-38,28,36,11);cx.fill();
+    cx.fillStyle='#E8C9AC';cx.beginPath();cx.arc(0,-47,13,0,6.3);cx.fill();
+    cx.fillStyle='rgba(50,40,36,.9)';cx.beginPath();cx.arc(0,-51,13,3.14,6.28);cx.fill();
+    cx.restore();
+    plate(fam.x+sw,fam.y-6,'家屬','rgba(150,90,50,.96)','#fff',12);
+    const line=K.FAMLINES[fam.line%K.FAMLINES.length];
+    cx.font='600 13px sans-serif';cx.textAlign='center';
+    const bw=cx.measureText(line).width+22;
+    cx.fillStyle='rgba(255,255,255,.95)';rr(fam.x+sw-bw/2,fy-96,bw,30,9);cx.fill();
+    cx.beginPath();cx.moveTo(fam.x+sw-6,fy-66);cx.lineTo(fam.x+sw+6,fy-66);cx.lineTo(fam.x+sw,fy-58);cx.closePath();cx.fill();
+    cx.fillStyle='#4A3A32';cx.fillText(line,fam.x+sw,fy-76);}
+
+  for(const c of CH.slice().sort((a,b)=>a.y-b.y)){
+    const isC=G.cpr===c.id&&on, ph=A*11.5;
+    const bo=c.moving?Math.abs(Math.sin(c.bob))*4:0;
+    const cb=isC?Math.sin(ph)*6:0, tilt=isC?(c.x<BEDC.cx?.20:-.20)+Math.sin(ph)*.06:0;
+    const down=c.down>0, y=c.y-bo+cb;
+    shadow(c.x,c.y+3,down?24:19);
+    if(meId===c.id){cx.strokeStyle='#3FD0E8';cx.lineWidth=4;cx.beginPath();
+      cx.ellipse(c.x,c.y+3,27,11,0,0,6.3);cx.stroke();}
+    if(G.leader===c.id){cx.strokeStyle='#E8B84B';cx.lineWidth=3;cx.beginPath();
+      cx.ellipse(c.x,c.y+3,33,14,0,0,6.3);cx.stroke();}
+    const zapping=c.zap>0.75;
+    if(c.zap>0){const a=Math.min(.9,c.zap);
+      cx.fillStyle='rgba(255,242,150,'+a*.55+')';cx.beginPath();cx.arc(c.x,y-30,52,0,6.3);cx.fill();
+      cx.strokeStyle='rgba(255,255,255,'+a+')';cx.lineWidth=4;cx.lineJoin='round';
+      for(let k2=-1;k2<=1;k2+=2){cx.beginPath();
+        cx.moveTo(c.x+k2*30,y-96);cx.lineTo(c.x+k2*10,y-58);cx.lineTo(c.x+k2*22,y-52);
+        cx.lineTo(c.x+k2*4,y-16);cx.stroke();}}
+    const fallK=down?(c.zap>0.75?(1-(c.zap-0.75)/0.55):1):0;
+    const shake=zapping?Math.sin(A*40)*3:0;
+    cx.save();cx.translate(c.x+shake,down?(y-10*fallK):y);cx.rotate(down?1.42*fallK:tilt);
+    cx.fillStyle=c.coat?'#F4F7F9':c.c;rr(-15,-40,30,38,12);cx.fill();
+    if(c.coat){cx.fillStyle='#C9D6DE';rr(-15,-40,30,38,12);cx.fill();
+      cx.fillStyle='#FBFDFE';rr(-12,-38,24,34,10);cx.fill();}
+    cx.fillStyle='#EDC7A6';cx.beginPath();cx.arc(0,-49,14,0,6.3);cx.fill();
+    cx.fillStyle='rgba(40,50,58,.9)';cx.beginPath();cx.arc(0,-53,14,3.14,6.28);cx.fill();
+    cx.fillStyle=c.coat?'#3A4A56':'#FFF';cx.font='700 15px sans-serif';cx.textAlign='center';
+    cx.fillText(c.n,0,-14);
+    cx.restore();
+    if(!c.online&&!SOLO&&!REPLAY)plate(c.x,y-66,'未上線','rgba(90,100,110,.9)','#CBD6DE',11);
+    if(G.leader===c.id)plate(c.x,y-126,'Leader','rgba(160,124,20,.96)','#fff',11);
+    if(down)plate(c.x,c.y-46,(c.downWhy==='tired'?'我沒力了 ':'被電到 ')+Math.ceil(c.down)+'s',
+      c.downWhy==='tired'?'rgba(190,120,30,.96)':'rgba(200,60,60,.96)','#fff',12);
+    const bub=c.bubble&&c.bubble.lines?c.bubble.lines[c.bubble.i]:null;
+    if(bub&&!down){cx.font='600 13px sans-serif';cx.textAlign='center';
+      const bw=cx.measureText(bub).width+22;
+      cx.fillStyle='rgba(255,255,255,.96)';rr(c.x-bw/2,y-116,bw,30,9);cx.fill();
+      cx.beginPath();cx.moveTo(c.x-6,y-86);cx.lineTo(c.x+6,y-86);cx.lineTo(c.x,y-78);cx.closePath();cx.fill();
+      cx.fillStyle='#39434B';cx.fillText(bub,c.x,y-96);}
+    if(c.act>0&&!down){const s2=1+Math.sin(Math.min(1,(2.0-c.act)/0.5)*3.14)*0.32;
+      cx.fillStyle='rgba(63,208,232,.9)';cx.beginPath();cx.ellipse(c.x+24,y-46,13*s2,10*s2,0,0,6.3);cx.fill();
+      plate(c.x,y-92,'一下','rgba(30,120,150,.96)','#fff',13);}
+    if(c.hold&&!down){cx.fillStyle='rgba(16,24,32,.68)';rr(c.x+8,y-70,25,25,7);cx.fill();
+      cx.font='14px sans-serif';cx.textAlign='center';cx.fillText(K.ITEM[c.hold].s,c.x+20,y-53);}
+    if(isC)plate(c.x,y-78,G.cnt+' 下','rgba(242,112,75,.96)','#fff',14);
+    if(c.busy){const q=1-c.busy.r/c.busy.d;
+      cx.fillStyle='rgba(16,24,32,.35)';rr(c.x-23,y-88,46,8,4);cx.fill();
+      cx.fillStyle=c.slow?'#E8A33D':'#3FD0E8';rr(c.x-23,y-88,46*q,8,4);cx.fill();}}
+}
+
+/* ═══════════ 監視器 ═══════════ */
+const MON={};
+function mkMon(id,col,win,sr,base,amp){
+  const el=$(id);
+  MON[id]={el,x:el.getContext('2d'),col,win,sr,base,amp,
+    n:Math.round(win*sr),buf:new Float32Array(Math.round(win*sr)),head:0,t:0,r:null,rc:99};
+}
+mkMon('cEcg','#25E06B',4.0,140,.50,.40);
+mkMon('cCo2','#F5C542',9.0,40,.94,.90);
+function pushMon(dt){
+  if(!G)return;
+  for(const id in MON){const o=MON[id];
+    let n=Math.min(o.sr*0.2,Math.round(dt*o.sr));if(n<1&&Math.random()<dt*o.sr)n=1;
+    for(let i=0;i<n;i++){o.t+=1/o.sr;
+      o.buf[o.head]=id==='cEcg'?IHCA.ecgAt(G,o.t,false):IHCA.co2At(G,o.t);
+      o.head=(o.head+1)%o.n;}}
+}
+function drawMon(){
+  for(const id in MON){const o=MON[id],dpr=devicePixelRatio||1;
+    if(!o.r||++o.rc>40){o.r=o.el.getBoundingClientRect();o.rc=0;}
+    const r=o.r;if(!r.width)continue;
+    if(o.el.width!==Math.round(r.width*dpr)){o.el.width=Math.round(r.width*dpr);o.el.height=Math.round(r.height*dpr);}
+    const x=o.x,w=r.width,h=r.height;
+    x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,w,h);
+    x.strokeStyle='rgba(60,80,70,.28)';x.lineWidth=1;
+    for(let gx=0;gx<w;gx+=Math.max(12,w/8)){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.stroke();}
+    x.beginPath();x.moveTo(0,h*o.base);x.lineTo(w,h*o.base);x.stroke();
+    x.strokeStyle=o.col;x.lineWidth=1.9;x.lineJoin='round';x.lineCap='round';x.beginPath();
+    const base=h*o.base,amp=h*o.amp;
+    for(let i=0;i<o.n;i++){const v=o.buf[(o.head+i)%o.n];
+      const pxx=i*(w/(o.n-1)),pyy=base-v*amp;i?x.lineTo(pxx,pyy):x.moveTo(pxx,pyy);}
+    x.stroke();
+    x.fillStyle='rgba(255,255,255,.35)';x.fillRect(w-2,0,2,h);}
+}
+function paintMonNums(){
+  if(!G)return;
+  const p=IHCA.physOf(G),R=RH(G.rhythm);
+  $('vHR').textContent=G.leads?(p.hr==null?'‑‑':p.hr):'‑‑';
+  $('vSp').textContent=p.sp==null?'‑‑':p.sp;
+  $('vCo').textContent=p.co2==null?'‑‑':p.co2;
+  $('vCo').style.color=G.air==='bad'?'#FF5566':(G.air==='ETT'?'#F5C542':'#C9A24A');
+  $('vBP').textContent=G.nibp.r>0?Math.ceil(G.nibp.r)+'s…':(G.nibp.val||'未測量');
+  const alm=$('alm');let main,s2;
+  if(!G.leads){main='NO';s2='LEAD';alm.style.color='#8296A8';}
+  else if(G.rosc){main=R.short;s2='ROSC';alm.style.color='#4CAF6E';}
+  else if(G.check>0){main='CHECK';s2='';alm.style.color='#F5C542';}
+  else if(G.air==='bad'){main='NO CO₂';s2='';alm.style.color='#FF5566';}
+  else{main=R.short;s2=R.shock?'SHOCK':'';alm.style.color='#FF5566';}
+  alm.innerHTML=main+'<span class="sub">'+(s2||'')+'</span>';
+}
+/* 心律判讀大圖 */
+const STRIP={n:900,win:6,buf:new Float32Array(900),head:0,t:0,el:null,x:null,last:0};
+STRIP.el=$('cStrip');STRIP.x=STRIP.el.getContext('2d');
+function fillStrip(){const sr=STRIP.n/STRIP.win;
+  for(let i=0;i<STRIP.n;i++)STRIP.buf[i]=IHCA.ecgAt(G,STRIP.t-(STRIP.n-1-i)/sr,true);
+  STRIP.head=0;}
+function pushStrip(dt){
+  if(!G||G.check<=0)return;
+  if(STRIP.last<=0)fillStrip();
+  const sr=STRIP.n/STRIP.win;
+  const n=Math.min(sr*0.2,Math.round(dt*sr));
+  for(let i=0;i<n;i++){STRIP.t+=1/sr;STRIP.buf[STRIP.head]=IHCA.ecgAt(G,STRIP.t,true);
+    STRIP.head=(STRIP.head+1)%STRIP.n;}
+}
+function drawStrip(){
+  const el=STRIP.el,dpr=devicePixelRatio||1,r=el.getBoundingClientRect();if(!r.width)return;
+  if(el.width!==Math.round(r.width*dpr)){el.width=Math.round(r.width*dpr);el.height=Math.round(r.height*dpr);}
+  const x=STRIP.x,w=r.width,h=r.height;
+  x.setTransform(dpr,0,0,dpr,0,0);
+  x.fillStyle='#050B0A';x.fillRect(0,0,w,h);
+  const pps=w/STRIP.win, sm=pps*0.04;
+  x.strokeStyle='rgba(70,140,110,.14)';x.lineWidth=1;
+  for(let gx=0;gx<w;gx+=sm){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.stroke();}
+  for(let gy=0;gy<h;gy+=sm){x.beginPath();x.moveTo(0,gy);x.lineTo(w,gy);x.stroke();}
+  x.strokeStyle='rgba(70,160,120,.30)';
+  for(let gx=0;gx<w;gx+=sm*5){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.stroke();}
+  for(let gy=0;gy<h;gy+=sm*5){x.beginPath();x.moveTo(0,gy);x.lineTo(w,gy);x.stroke();}
+  x.strokeStyle='#39F58C';x.lineWidth=2.1;x.lineJoin='round';x.beginPath();
+  for(let i=0;i<STRIP.n;i++){const v=STRIP.buf[(STRIP.head+i)%STRIP.n];
+    const pxx=i*(w/(STRIP.n-1)),pyy=h*.52-v*h*.45;i?x.lineTo(pxx,pyy):x.moveTo(pxx,pyy);}
+  x.stroke();
+  x.fillStyle='rgba(150,200,180,.5)';x.font='10px ui-monospace,monospace';x.textAlign='left';
+  for(let s=1;s<STRIP.win;s++)x.fillText(s+'s',s*pps+2,h-3);
+}
+function paintStrip(){
+  const box=$('strip');
+  if(!G||G.check<=0||G.over){box.classList.remove('on');STRIP.last=0;return;}
+  if(STRIP.last<=0)fillStrip();
+  STRIP.last=G.check;
+  box.classList.add('on');
+  $('stripT').textContent='心律判讀 · 第 '+G.round+' 次檢查';
+  $('stripC').textContent='剩 '+Math.ceil(G.check)+' 秒';
+  const rec=G.checkRec;
+  $('stripN').innerHTML=G.leads
+    ? '全部停手。Leader 要宣告「可電擊」或「不可電擊」，同時該有人摸脈搏。'
+      +(rec&&rec.pulse?'　<span style="color:#6FE0A6">已摸脈搏</span>':'　<span style="color:#FF8A93">還沒有人摸脈搏</span>')
+    : '<span style="color:#FF8A93">EKG lead 還沒貼上 — 螢幕上什麼都看不到。</span>';
+  drawStrip();
+}
+
+/* ═══════════ 動作面板（三層排序） ═══════════ */
+let _keys=[];
+function setActs(list){
+  const P=$('acts');
+  const keyOf=x=>x.t==='btn'?('b:'+x.k):('h:'+x.k);
+  const keys=list.map(keyOf);
+  const same=keys.length===_keys.length&&keys.every((k,i)=>k===_keys[i]);
+  if(same){const kids=P.children;
+    for(let i=0;i<list.length;i++){const it=list[i],el=kids[i];if(!el)break;
+      if(it.t==='btn'){if(el.innerHTML!==it.label)el.innerHTML=it.label;
+        const cls=it.cls||'';if(el.className!==cls)el.className=cls;el.disabled=!!it.dis;}
+      else{if(el.className!==(it.cls||''))el.className=it.cls||'';
+        if(el.innerHTML!==it.html)el.innerHTML=it.html;}}
+    return;}
+  _keys=keys;P.innerHTML='';
+  for(const it of list){
+    let el;
+    if(it.t==='btn'){el=document.createElement('button');el.className=it.cls||'';
+      el.innerHTML=it.label;el.disabled=!!it.dis;el.onclick=it.fn;}
+    else{el=document.createElement('div');el.className=it.cls||'';el.innerHTML=it.html;}
+    P.appendChild(el);}
+}
+/* 站位改變時震一下 —— 學員盯著大螢幕，用觸覺知道自己到了 */
+let _lastStn=null;
+function buzz(ms){try{if(navigator.vibrate)navigator.vibrate(ms);}catch(e){}}
+const STNAME={head:'床頭',bedL:'床左',bedR:'床右',foot:'床尾 · Leader',door:'門口'};
+function paintYouAre(){
+  const el=$('youare');if(!el)return;
+  const c=meC();
+  if(!c||MODE==='host'||MODE==='teacher'){el.innerHTML='';return;}
+  const k=nearSt(c),eq=nearEq(c);
+  const key=k||('eq:'+eq)||'';
+  if(key!==_lastStn){ if(_lastStn!==null&&key)buzz(k?[18,40,18]:14); _lastStn=key; }
+  let where,cls='';
+  if(k){where=STNAME[k]||k;cls='on';}
+  else if(eq){where=G.eq[eq].n;cls='on';}
+  else if(c.moving)where='移動中…';
+  else where='空地 — 還沒到任何位置';
+  const h='<span class="me" style="color:'+c.c+'">'+c.n+(G.leader===c.id?' ★':'')+'</span>'
+    +'<span class="st'+(cls?' '+cls:'')+'">'+where+'</span>'
+    +(c.hold?'<span class="hd">手上：<b>'+K.ITEM[c.hold].n+(c.dose?' '+c.dose+'mg':'')+'</b></span>':'')
+    +(c.busy?'<span class="hd">'+c.busy.l+' '+Math.ceil(c.busy.r)+'s</span>':'');
+  if(el.innerHTML!==h)el.innerHTML=h;
+}
+/* tier 1 = 現在能做的處置；2 = 溝通；3 = 準備與雜項 */
+function buildPanel(){
+  const c=meC();if(!c){setActs([{t:'html',k:'w',cls:'hint',html:'等待連線…'}]);return;}
+  const L=[];
+  const B=(tier,key,label,fn,cls,dis)=>L.push({tier,t:'btn',k:key,label,fn,cls:cls||'',dis:!!dis});
+  const H=(tier,key,html,cls)=>L.push({tier,t:'html',k:key,html,cls:cls||'hint'});
+  const A=(a,p)=>()=>{NET.act(a,p);sub=null;paint();};
+  const SUB=s=>()=>{sub=s;paint();};
+
+  if(G.over){
+    H(1,'over','急救結束，報表已顯示。','hint');
+    if(SOLO||MODE==='teacher')B(1,'again','再來一局',()=>{location.reload();},'go wide');
+    setActs(strip3(L));return;}
+  if(G.paused){setActs([{t:'html',k:'p',cls:'hint',html:'⏸ 已暫停（教師模式）。這是討論用的停格。'}]);return;}
+  if(c.down>0){setActs([{t:'html',k:'d',cls:'hint bad',
+    html:c.n+(c.downWhy==='tired'?' 力氣用完倒下了，':' 被電到了，')+Math.ceil(c.down)+' 秒後才爬得起來。'}]);return;}
+  if(c.busy){setActs([{t:'html',k:'b',cls:'hint',
+      html:c.busy.l+'… '+Math.ceil(c.busy.r)+' 秒'+(c.slow?'<br><span class="bad">家屬就在旁邊，動作變慢了。</span>':'')},
+    {t:'btn',k:'cancel',label:'中斷',cls:'ghost wide',fn:A('cancel')}]);return;}
+
+  const hk=c.hold?K.ITEM[c.hold].k:null, k=nearSt(c), eq=nearEq(c), atS=(k==='bedL'||k==='bedR');
+  const lead=G.leader===c.id;
+
+  /* ── 子選單 ── */
+  if(sub){
+    if(sub==='drug'){H(3,'l','抽藥（在急救車旁）');
+      for(const m of K.DRUGS) m==='amio'?B(3,'am',K.ITEM[m].n+' ▸',SUB('amio'))
+        :B(3,'d'+m,K.ITEM[m].n,A('draw',{k:m}));
+      B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='amio'){H(3,'l','Amiodarone 劑量（ACLS：第一劑 300mg，第二劑 150mg）');
+      for(const d of K.AMIO)B(3,'a'+d,d+' mg',A('draw',{k:'amio',dose:d}),'go');
+      B(3,'bk','← 返回',SUB('drug'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='gear'){
+      B(3,'gc',K.ITEM.cath.n+' ('+G.caths+')',A('grab',{k:'cath'}),'',G.caths<=0);
+      B(3,'gio',K.ITEM.io.n,A('grab',{k:'io'}),'go');
+      B(3,'gn',K.ITEM.needle.n,A('grab',{k:'needle'}));
+      B(3,'ge','插管器材 ▸',SUB('ett1'),'wide');
+      B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='ett1'){H(3,'l','1/3　喉頭鏡');
+      for(const x of K.SCOPES)B(3,'s'+x,K.SCOPEN[x],()=>{ettScope=x;sub='ett2';paint();},'go');
+      B(3,'bk','← 返回',SUB('gear'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='ett2'){H(3,'l','2/3　鏡片號數');
+      for(const x of K.BLADES)B(3,'b'+x,x,()=>{ettBlade=x;sub='ett3';paint();},'go');
+      B(3,'bk','← 返回',SUB('ett1'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='ett3'){H(3,'l','3/3　管徑');
+      for(const x of K.TUBES)B(3,'t'+x,x+' 號',A('grab',{k:'ett',scope:ettScope,blade:ettBlade,tube:x}),'go');
+      B(3,'bk','← 返回',SUB('ett2'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='j'){for(const j of K.JOULES)B(3,'j'+j,j+' J',A('setJ',{j}),G.df.j===j?'go':'');
+      H(3,'l','焦耳數會影響轉律機率：200J 最高，50J 明顯偏低。');
+      B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='clue'){const vis=G.clues.filter(q=>q.txt!==null);
+      H(2,'l',c.n+' 知道的事：');
+      if(!vis.length)H(2,'n','目前什麼都不知道。');
+      vis.forEach((q,i)=>H(2,'c'+i,'<b>'+K.SRC[q.src]+' · '+mmt(q.t)+(q.cast?' · 已公開':' · 尚未公開')+'</b>'+q.txt,'cl'));
+      B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='order'){H(2,'l','下 order 後會顯示在畫面最上方，別人按「收到」才算複誦。');
+      for(const t of K.ORDERS)B(2,'o'+t,t,A('order',{txt:t}),'talk');
+      B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='ready'){
+      (c.recent||[]).forEach((t,i)=>B(2,'r'+i,'📢 '+t,A('ready',{txt:t}),'go wide'));
+      readyList(c,k,hk).forEach((t,i)=>B(2,'q'+i,'📢 '+t,A('ready',{txt:t}),'talk'));
+      B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+  }
+
+  /* ── ① 現在能做的處置 ── */
+  if(G.check>0){
+    H(1,'chk','心律檢查中 — 全部停手。停頓每多一秒，灌流就掉一分。');
+    if(lead&&k==='foot'){
+      B(1,'cs','宣告：可電擊',A('callRhythm',{v:'shock'}),'hot');
+      B(1,'cn','宣告：不可電擊',A('callRhythm',{v:'noshock'}),'go');}
+    else if(lead)H(1,'cl','Leader 要站到床尾才能做判讀宣告。');
+    else H(1,'cw','等 Leader'+(G.leader?'（'+C(G.leader).n+'）':'')+'宣告判讀。');
+  }
+  if(G.cpr===c.id){const f=Math.round(c.fat*100);
+    H(1,'fat','<b>'+G.cnt+'</b><span style="color:var(--dim);font-size:12px">下</span>'
+      +'<div class="fat"><i style="width:'+f+'%;background:'+(f>70?'#E05555':f>40?'#E8A33D':'#4CAF6E')+'"></i></div>'
+      +'<span style="color:var(--dim);font-size:12px">疲勞 '+f+'%</span>','cnt');
+    if(G.needPause&&!G.pauseVent&&!G.holdCpr)B(1,'cp','數到 30 · 停手讓通氣',A('callPause'),'warn wide');
+    if(G.pauseVent){H(1,'pv','等床頭壓甦醒球（'+G.breaths+'/2）已等 '+Math.round(G.noVentT)+' 秒');
+      if(G.noVentT>12)B(1,'sv','放棄這輪通氣',A('skipVent'),'ghost');}
+    if(G.holdCpr)B(1,'rc','繼續壓胸',A('resumeCpr'),'go wide');}
+  if(atS){
+    if(G.check<=0){
+      if(hk==='paddle')H(1,'np','手上拿著電擊板，沒辦法壓胸。');
+      else if(G.cpr!==c.id)B(1,'cpr',G.cpr?'接手壓胸':'開始壓胸',A('cprStart'),'go wide');
+      else B(1,'cpr0','停止壓胸',A('cprStop'),'hot');}
+    B(1,'pulse','摸脈搏 5s',A('checkPulse'));
+    B(1,'nibp',G.nibp.r>0?'NIBP 量測中 '+Math.ceil(G.nibp.r)+'s':'量 NIBP 30s',A('nibp'),'',G.nibp.r>0);
+  }
+  if(k==='head'){
+    B(1,'bag',G.pauseVent?'壓甦醒球 ('+G.breaths+'/2)':'壓甦醒球',A('bag'),G.pauseVent?'go wide':'');
+    const h=G.ch.find(o=>o.id!==c.id&&o.active!==false&&o.hold==='ett'&&Math.hypot(o.x-c.x,o.y-c.y)<165);
+    if(G.air==='bad'){H(1,'nb','EtCO₂ 沒有波形，管子位置不對。','hint bad');
+      if(c.hold)H(1,'hb','手上有東西就不能插管，先放下。');
+      else if(h)B(1,'re','拔管重插 15s — '+h.n+' 遞給你',A('reett'),'hot wide');
+      else H(1,'nh','重插一樣要有人再備一套器材送過來。');}
+    else if(G.air==='BVM'){
+      if(c.hold)H(1,'hb','手上有東西就不能插管，先放下。');
+      else if(h)B(1,'et','執行插管 15s（'+K.SCOPEN[h.ettSpec.scope]+'）— '+h.n+' 遞給你',A('ett'),'go wide');
+      else H(1,'nh','要插管的話，需要有人去急救車拿插管器材，走到你旁邊。');}
+    else H(1,'ok','已插管，每 6 秒自動給一次，也可以手動壓。');}
+  if(c.hold){
+    if(hk==='leads'&&atS)B(1,'al','貼上 EKG lead 5s',A('attachLeads'),'go wide');
+    if(hk==='cath'&&atS)B(1,'iv','上針 10s',A('iv'),'go wide');
+    if(hk==='io'&&atS)B(1,'io','打骨內針 IO 12s',A('ioAccess'),'go wide');
+    if(hk==='needle'&&atS)B(1,'nd','針刺減壓 12s',A('needle'),'go wide');
+    if(hk==='drug'&&atS)B(1,'gv','推 '+K.ITEM[c.hold].n+(c.dose?' '+c.dose+'mg':''),A('give'),'go wide',!G.ivFixed);
+    if(hk==='drug'&&atS&&!G.ivFixed)H(1,'ni','還沒有可以用的血管通路。','hint bad');
+    if(hk==='paddle'){
+      B(1,'clr',clearOnG()?'已喊 CLEAR（'+Math.ceil(10-(G.t-G.clearAt))+'s）':'📢 喊 CLEAR — 大家手離開',
+        A('clear'),clearOnG()?'ghost wide':'warn wide',clearOnG());
+      const e=G.eq.defib,okc=Math.hypot(c.x-e.x,c.y-e.y)<=e.cable;
+      if(!atS)H(1,'ps','拿著電擊板，要站到<b>床左或床右</b>才能放電。');
+      else if(!okc)H(1,'pc2','線不夠長 — 要有人把電擊器推近一點。','hint bad');
+      else if(!G.df.charged&&G.df.chargeT<=0)B(1,'ch','充電 '+G.df.j+'J · 3s',A('charge'),'warn');
+      else if(G.df.chargeT>0)H(1,'cg','充電中… '+Math.ceil(G.df.chargeT)+' 秒');
+      else B(1,'sh','放 電 '+G.df.j+'J'+(G.df.sync?'（同步）':''),A('shock'),'hot wide');
+      if(!G.df.charged&&G.df.chargeT<=0&&okc&&!atS)B(1,'ch2','充電 '+G.df.j+'J · 3s',A('charge'),'warn');}
+    if(hk==='probe'){const e=G.eq.echo,okc=Math.hypot(c.x-e.x,c.y-e.y)<=e.cable;
+      if(!['head','bedL','bedR'].includes(k))H(1,'pb','拿著探頭，要站到床邊才能掃。');
+      else if(!okc)H(1,'pb2','線不夠長 — 超音波主機離太遠。','hint bad');
+      else B(1,'sc','執行超音波掃描 15s',A('scan'),'go wide');}
+    if(hk==='ett'){
+      const hd=G.ch.find(o=>o.id!==c.id&&o.active!==false&&nearSt(o)==='head');
+      H(1,'eh',hd?'走到 '+hd.n+' 旁邊，他才會出現插管選項。':'把器材帶到床頭旁邊。');}
+  }
+  if(eq==='pc')B(1,'cht','查病歷 12s',A('chart'),'go');
+  const canAsk=G.family.gone?(k==='door'):(Math.hypot(c.x-G.family.x,c.y-G.family.y)<140);
+  if(canAsk)B(1,'ask','問家屬與護理師 10s',A('ask'),'go');
+  if(lead&&k==='foot'&&G.check<=0&&G.phase!=='post')B(1,'rk','停下來檢查心律 15s',A('rhythmCheck'),'warn wide');
+  if(G.phase==='post'){
+    H(1,'po','已確認 ROSC。停止壓胸、量血壓、確認氣道，然後由 Leader 宣告結束交班。','hint good');
+    if(lead&&k==='foot')B(1,'end','宣告急救結束、交班',A('endCase'),'lead wide');}
+
+  /* ── ② 溝通 ── */
+  B(2,'rdy','📢 回報 ▸',SUB('ready'),'talk wide');
+  G.clues.filter(q=>q.txt!==null&&!q.cast)
+    .forEach(q=>B(2,'ct'+q.src,'📢 大聲喊出：'+K.SRC[q.src],A('cast',{src:q.src}),'go wide'));
+  if(k==='foot'){
+    if(!lead)B(2,'ld',G.leader?'接手 Leader（向 '+C(G.leader).n+' 交接）':'★ 宣告：我是 Leader',
+      A('claimLead'),'lead wide');
+    else B(2,'or','下 Order ▸',SUB('order'),'talk wide');}
+  if(eq==='pc')B(2,'tc','📢 報時給全隊',A('timeCall'),'talk');
+  if(G.order&&G.order.by!==c.id&&!G.order.ack.includes(c.id))
+    B(2,'ack','✓ 複誦：'+G.order.txt,A('ack'),'go wide');
+
+  /* ── ③ 準備與雜項 ── */
+  if(c.hold)H(3,'held','手上：'+K.ITEM[c.hold].s+' <b>'+K.ITEM[c.hold].n
+    +(c.dose?' '+c.dose+'mg':'')
+    +(c.ettSpec?'（'+(K.SCOPEN[c.ettSpec.scope]||'')+'・'+c.ettSpec.blade+'・'+c.ettSpec.tube+' 號管）':'')
+    +'</b>','held');
+  if(eq==='cart'&&!c.hold&&!c.push){
+    B(3,'dr','抽藥 ▸',SUB('drug'));B(3,'gr','拿器材 ▸',SUB('gear'));
+    G.tray.forEach((it,i)=>B(3,'tr'+i,'拿回 '+K.ITEM[it.k].n+(it.dose?' '+it.dose+'mg':''),
+      A('takeTray',{k:it.k}),'wide'));}
+  if(eq==='defib'&&!c.push){
+    if(!c.hold&&!G.leads)B(3,'tl','拿 '+K.ITEM.leads.n,A('takeLeads'),'go wide');
+    if(!c.hold&&!G.df.holder)B(3,'tp','拿起電擊板',A('takePaddle'));
+    else if(G.df.holder&&G.df.holder!==c.id)H(3,'ph','電擊板在 '+C(G.df.holder).n+' 手上。');
+    if(G.df.holder===c.id||!G.df.holder){B(3,'sj','焦耳數：'+G.df.j+' J ▸',SUB('j'));
+      B(3,'sy',G.df.sync?'模式：同步 SYNC':'模式：非同步',A('setSync'),G.df.sync?'warn':'');}}
+  if(eq==='echo'&&!c.push&&!c.hold&&!G.probeHolder)B(3,'tpr','拿起探頭',A('takeProbe'));
+  if(eq==='echo'&&G.probeHolder&&G.probeHolder!==c.id)H(3,'pho','探頭在 '+C(G.probeHolder).n+' 手上。');
+  if(c.push)B(3,'rel','放開 '+G.eq[c.push].n,A('release'),'ghost');
+  else if(eq&&!c.hold)B(3,'psh','推 '+G.eq[eq].n,A('push',{k:eq}));
+  if(c.hold&&hk!=='paddle'&&hk!=='probe'){
+    if(eq==='cart')B(3,'dp','放回急救車：'+K.ITEM[c.hold].n,A('drop'),'ghost wide');
+    else H(3,'dph','手上的 '+K.ITEM[c.hold].n+' 要走回急救車旁才放得下。');}
+  if(hk==='paddle')B(3,'dpp','放下電擊板',A('drop'),'ghost');
+  if(hk==='probe')B(3,'dpb','放下探頭',A('drop'),'ghost');
+  if(G.family&&!G.family.gone&&Math.hypot(c.x-G.family.x,c.y-G.family.y)<140)
+    B(3,'esc','帶家屬到門外 8s',A('escort'),'wide');
+  B(3,'clu','線索',SUB('clue'),'ghost');
+  setActs(strip3(L));
+}
+/* 依 tier 排序並插入分隔標題 */
+function strip3(L){
+  const out=[];const names={1:'① 現在能做的處置',2:'② 溝通',3:'③ 準備與雜項'};
+  for(const t of [1,2,3]){
+    const g=L.filter(x=>x.tier===t);
+    if(!g.length)continue;
+    out.push({t:'html',k:'sec'+t,cls:'sec t'+t,html:names[t]+'<i></i>'});
+    for(const x of g)out.push(x);}
+  return out;
+}
+function readyList(c,k,hk){
+  const R=K.READYFOR,out=[];
+  if(G.roscFelt&&!G.roscKnown&&(c.recent||[]).includes('我摸到脈搏了！'))out.push('我摸到脈搏了！','病人有脈搏，停止壓胸');
+  if(G.cpr===c.id)out.push.apply(out,R.cpr);
+  if(k==='head')out.push.apply(out,R.head);
+  if(nearEq(c)==='pc')out.push.apply(out,R.rec);
+  if(hk==='drug')out.push.apply(out,R.drug);
+  if(hk==='cath')out.push.apply(out,R.cath);
+  if(hk==='io')out.push.apply(out,R.io);
+  if(hk==='ett')out.push.apply(out,R.ett);
+  if(hk==='paddle')out.push.apply(out,R.pad);
+  if(hk==='probe')out.push.apply(out,R.probe);
+  if(['bedL','bedR'].includes(k))out.push.apply(out,R.pulse);
+  out.push.apply(out,R.any);
+  return out.filter((v,i,a)=>a.indexOf(v)===i);
+}
+
+/* ═══════════ 角色列（單機／主機） ═══════════ */
+let _lastWho='';
+function paintWho(){
+  if(MODE==='player'||MODE==='teacher'||REPLAY&&false)return;
+  if(!G)return;
+  const h=G.ch.map(c=>{
+    let b='空地',col=null;
+    if(c.down>0){b='倒地 '+Math.ceil(c.down)+'s';col='#FF5566';}
+    else if(G.cpr===c.id&&G.pauseVent){b='等通氣';col='#F5C542';}
+    else if(G.cpr===c.id){b='壓胸 '+G.cnt;col='#FF7A59';}
+    else if(c.busy){b=c.busy.l.slice(0,6)+'…';col='#3FD0E8';}
+    else if(c.push){b='推'+G.eq[c.push].n;col='#9B86EE';}
+    else if(c.hold){b=K.ITEM[c.hold].n.slice(0,6);col='#4CAF6E';}
+    else{const k=nearSt(c),e=nearEq(c);b=k?K.ST[k].n.split(' ')[0]:(e?G.eq[e].n:'空地');}
+    return '<div class="w'+(ME===c.id?' sel':'')+(G.leader===c.id?' ld':'')
+      +((!c.online&&!SOLO&&!REPLAY)?' off':'')+'" data-id="'+c.id+'">'
+      +(col?'<div class="d" style="background:'+col+'"></div>':'')
+      +(G.leader===c.id?'<div class="cr">★</div>':'')
+      +'<div class="n" style="color:'+c.c+'">'+c.n+'</div><div class="b">'+b+'</div></div>';}).join('');
+  if(h!==_lastWho){_lastWho=h;const el=$('who');el.innerHTML=h;
+    if(SOLO||REPLAY)[...el.children].forEach(d=>d.onclick=()=>{ME=d.dataset.id;sub=null;paint();});}
+}
+
+/* ═══════════ 進場／大廳 ═══════════ */
+let gateName=localStorage.getItem('ihcaName')||'', gateSlot=localStorage.getItem('ihcaSlot')||'';
+let _lastGate='';
+function paintGate(){
+  const e=$('gate');
+  if(DENIED==='room'&&MODE==='player'){
+    e.classList.add('on');
+    const html='<div class="inner"><h1>輸入房間代碼</h1>'
+      +'<p>四位數字，在投影幕上。或請老師把 QR code 給你掃。</p>'
+      +'<input id="roomIn" maxlength="4" inputmode="numeric" value="" placeholder="1234">'
+      +'<div style="margin-top:22px"><button class="go" style="width:100%;min-height:58px;font-size:16px" id="roomBtn">進入</button></div></div>';
+    if(html!==_lastGate){_lastGate=html;e.innerHTML=html;
+      $('roomBtn').onclick=()=>{const v=($('roomIn').value||'').trim();
+        if(!v)return;ROOM=v;localStorage.setItem('ihcaRoom',v);DENIED=null;_lastGate='';NET.hello();};}
+    return;
+  }
+  if(DENIED==='key'){
+    e.classList.add('on');
+    e.innerHTML='<div class="inner"><h1>需要教師金鑰</h1>'
+      +'<p>請用終端機印出來的教師網址開啟（網址結尾有 <b>&amp;k=…</b>）。</p></div>';
+    return;
+  }
+  if(MODE==='player'){
+    if(ME&&LOBBY&&LOBBY.phase!=='lobby'){e.classList.remove('on');return;}
+    if(!LOBBY){e.classList.add('on');
+      if(_lastGate!=='wait'){_lastGate='wait';
+        e.innerHTML='<div class="inner"><h1>連線中…</h1><p>確認手機和主機在同一個 WiFi。</p></div>';}
+      return;}
+    e.classList.add('on');
+    const taken=LOBBY.slots;
+    if(ME){
+      const meS=taken.find(x=>x.id===ME)||{};
+      const html2='<div class="inner" style="text-align:center;padding-top:8vh">'
+        +'<div style="font-size:76px;font-weight:700;color:'+(meS.c||'#fff')+';line-height:1">'+(meS.name||'')+'</div>'
+        +'<h1 style="margin-top:14px">已經進場了</h1>'
+        +'<p>把手機拿好，抬頭看大螢幕。教師按下開始就會進病房。</p>'
+        +'<div class="lab">現在有 '+taken.filter(x=>x.online).length+' / 6 人</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:7px">'
+        +taken.map(x=>'<div style="background:#141C24;border:1px solid '+(x.online?x.c:'#26333F')
+          +';border-radius:10px;padding:12px 2px;font-size:22px;font-weight:700;color:'
+          +(x.online?x.c:'#3A4A56')+'">'+(x.online?x.name:'—')+'</div>').join('')+'</div>'
+        +'<div style="margin-top:26px"><button class="ghost" style="width:100%" id="reJoin">改名字或換顏色</button></div>'
+        +'<p style="margin-top:22px;font-size:12.5px;color:#5F7183">操作方式：手指按住病房畫面任何一個位置，'
+        +'往哪個方向拖就往哪裡走；放開就停。輕點某個站位＝直接走過去。</p></div>';
+      if(html2!==_lastGate){_lastGate=html2;e.innerHTML=html2;
+        $('reJoin').onclick=()=>{localStorage.removeItem('ihcaName');ME=null;_lastGate='';paintGate();};}
+      return;
+    }
+    const html='<div class="inner"><h1>輸入一個字</h1>'
+      +'<p>這個字就是你在畫面上的代號，全隊都看得到。可以是名字裡的一個字。</p>'
+      +'<input id="nameIn" maxlength="2" value="'+gateName.replace(/"/g,'')+'" placeholder="季">'
+      +'<div class="lab">選一個顏色</div><div id="slots">'
+      +taken.map(s2=>'<button class="'+(gateSlot===s2.id?'on ':'')+(s2.online?'taken':'')+'" data-id="'+s2.id+'"'
+        +(s2.online?' disabled':'')+'>'
+        +'<span class="dot" style="background:'+s2.c+'"></span>'
+        +(s2.online?(s2.name||s2.id.toUpperCase()):'空位')+'</button>').join('')+'</div>'
+      +'<div style="margin-top:22px"><button class="go" style="width:100%;min-height:58px;font-size:16px" id="joinBtn">進入</button></div>'
+      +'</div>';
+    if(html!==_lastGate){_lastGate=html;e.innerHTML=html;
+      $('nameIn').oninput=ev=>{gateName=ev.target.value.trim();};
+      [...$('slots').children].forEach(b=>b.onclick=()=>{gateSlot=b.dataset.id;
+        [...$('slots').children].forEach(x=>x.classList.remove('on'));b.classList.add('on');});
+      $('joinBtn').onclick=()=>{
+        const nm=(gateName||'').trim();
+        if(!nm){$('nameIn').focus();return;}
+        localStorage.setItem('ihcaName',nm);
+        if(gateSlot)localStorage.setItem('ihcaSlot',gateSlot);
+        NET.send({t:'hello',role:'player',name:nm,slot:gateSlot||'',room:ROOM});
+      };}
+    return;
+  }
+  if(MODE==='host'){
+    if(!LOBBY||LOBBY.phase!=='lobby'){e.classList.remove('on');return;}
+    e.classList.add('on');
+    const url=studentURL();
+    const html='<div class="inner" style="max-width:1100px;text-align:center;padding-top:3vh">'
+      +'<h1 style="font-size:34px;margin-bottom:4px">IHCA 團隊復甦</h1>'
+      +'<p style="font-size:17px;margin-bottom:18px">用手機相機掃這個 QR code，輸入一個字就可以進來。</p>'
+      +'<div style="display:flex;gap:34px;align-items:center;justify-content:center;flex-wrap:wrap">'
+      +'<div style="background:#fff;padding:14px;border-radius:18px;line-height:0">'+qrSVG(url,9)+'</div>'
+      +'<div style="text-align:left">'
+      +'<div style="font-size:12px;letter-spacing:.16em;color:#8296A8;margin-bottom:6px">網址</div>'
+      +'<div style="font-family:var(--mono);font-size:clamp(16px,2.1vw,30px);color:#8FE3F5;word-break:break-all;max-width:22ch">'
+      + url.replace(/\?r=.*$/,'') +'</div>'
+      +'<div style="font-size:12px;letter-spacing:.16em;color:#8296A8;margin:18px 0 6px">房間代碼</div>'
+      +'<div style="font-family:var(--mono);font-size:52px;letter-spacing:.18em;color:#E8B84B">'+ROOM+'</div>'
+      +'</div></div>'
+      +'<div class="lab" style="margin-top:26px">已進場（'+LOBBY.slots.filter(x=>x.online).length+' / 6）</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;max-width:760px;margin:0 auto">'
+      +LOBBY.slots.map(x=>'<div style="background:#141C24;border:1px solid '+(x.online?x.c:'#26333F')
+        +';border-radius:12px;padding:14px 4px;font-size:30px;font-weight:700;color:'
+        +(x.online?x.c:'#3A4A56')+'">'+(x.online?x.name:'—')+'</div>').join('')+'</div>'
+      +'</div>';
+    if(html!==_lastGate){_lastGate=html;e.innerHTML=html;}
+    return;
+  }
+  e.classList.remove('on');
+}
+
+/* ═══════════ 教師控制台 ═══════════ */
+let _lastTC='';
+function paintTC(){
+  if(MODE!=='teacher'){$('tc').classList.remove('on');return;}
+  const e=$('tc');e.classList.add('on');
+  if(!LOBBY){e.innerHTML='<div class="inner"><h2>連線中…</h2></div>';return;}
+  const st=LOBBY.setup,inLobby=LOBBY.phase==='lobby';
+  const cz=K.CAUSES.find(c=>c.id===st.cause);
+  const warn=(cz&&st.rhythm!=='rand'&&cz.typical.indexOf(st.rhythm)<0)
+    ? '<p class="note" style="color:#E8A33D">⚠ '+cz.n+' 通常不會以 '+RH(st.rhythm).short+' 表現。刻意這樣配也可以，記得在 debriefing 說明。</p>':'';
+  const html='<div class="inner">'
+   +'<h2>已進場（'+LOBBY.slots.filter(s=>s.online).length+' / 6）</h2>'
+   +'<div class="roster">'+LOBBY.slots.map(s=>'<div class="'+(s.online?'':'off')+'" style="color:'
+     +(s.online?s.c:'#4A5A66')+'">'+(s.online?s.name:'—')+'<small>'+s.id.toUpperCase()+'</small></div>').join('')+'</div>'
+   +(inLobby?(
+     '<h2>這一場有幾個人</h2><div class="g3">'
+     +[3,4,5,6].map(k=>'<button class="'+(st.n===k?'on':'')+'" data-k="n" data-v="'+k+'">'+k+' 人</button>').join('')
+     +'</div><p class="note">沒用到的角色不會出現在病房裡，報表也不會列。學員的位子也只會開放這麼多個。</p>'
+     +'<h2>病人身上有沒有點滴</h2><div class="g">'
+     +K.DRIPS.map(d=>'<button class="'+(st.drip===d.id?'on':'')+'" data-k="drip" data-v="'+d.id+'">'+d.n+'</button>').join('')
+     +'</div><p class="note">有點滴＝一開始就有血管通路。沒有的話要有人去上針或打 IO。</p>'
+     +'<h2>一開始的心律</h2><div class="g">'
+     +'<button class="'+(st.rhythm==='rand'?'on':'')+'" data-k="rhythm" data-v="rand">隨機</button>'
+     +K.STARTRHY.map(id=>'<button class="'+(st.rhythm===id?'on':'')+'" data-k="rhythm" data-v="'+id+'">'
+       +RH(id).n+'<small style="opacity:.6;font-size:11px">'+(RH(id).shock?'可電擊':'不可電擊')+'</small></button>').join('')
+     +'</div>'
+     +'<h2>真正的病因</h2><div class="g">'
+     +'<button class="'+(st.cause==='rand'?'on':'')+'" data-k="cause" data-v="rand">隨機（學員猜）</button>'
+     +K.CAUSES.map(c=>'<button class="'+(st.cause===c.id?'on':'')+'" data-k="cause" data-v="'+c.id+'">'
+       +c.n+'<small style="opacity:.6;font-size:11px">建議：'+c.typical.map(r=>RH(r).short).join('/')+'</small></button>').join('')
+     +'</div>'+warn
+     +'<div style="margin-top:20px"><button class="go" style="width:100%;min-height:60px;font-size:17px" id="tcStart">開始演練</button></div>'
+   ):(
+     '<h2>演練中</h2><div class="g3">'
+     +'<button class="'+(LOBBY.paused?'warn':'')+'" id="tcPause">'+(LOBBY.paused?'▶ 繼續':'⏸ 暫停')+'</button>'
+     +'<button id="tcSpeed">速度 '+LOBBY.speed+'×</button>'
+     +'<button class="hot" id="tcStop">結束並看報表</button></div>'
+     +'<p class="note">暫停是給你做 pause-and-discuss 用的，全部人的畫面都會凍結。</p>'
+     +'<h2>結束之後</h2><div class="g">'
+     +'<button id="tcReport">看報表</button>'
+     +'<button id="tcRec">下載錄影檔</button>'
+     +'<button id="tcNew" class="wide">重新開一局（同一批人）</button></div>'
+     +(LOBBY.saved?'<p class="note">錄影已自動存到伺服器 recordings/'+LOBBY.saved+'</p>':'')
+   ))
+   +'<h2>學員掃這個</h2>'
+   +'<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">'
+   +'<div style="background:#fff;padding:10px;border-radius:14px;line-height:0">'+qrSVG(studentURL(),5)+'</div>'
+   +'<div><div style="font-family:var(--mono);font-size:15px;color:#8FE3F5;word-break:break-all">'+studentURL()+'</div>'
+   +'<div style="margin-top:10px;font-size:12px;color:var(--dim)">房間代碼</div>'
+   +'<div style="font-family:var(--mono);font-size:34px;letter-spacing:.16em;color:#E8B84B">'+ROOM+'</div></div></div>'
+   +'<h2>其他畫面</h2><p class="note">主機投影：'+location.origin+'/?m=host&k='+TKEY+'<br>'
+   +'重播播放器：'+location.origin+'/?m=replay</p>'
+   +'</div>';
+  if(html!==_lastTC){_lastTC=html;e.innerHTML=html;
+    e.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{
+      const s={};s[b.dataset.k]=(b.dataset.k==='n')?Number(b.dataset.v):b.dataset.v;
+      NET.send({t:'setup',setup:Object.assign({},st,s)});});
+    const on=(id,fn)=>{const el=$(id);if(el)el.onclick=fn;};
+    on('tcStart',()=>NET.send({t:'start'}));
+    on('tcPause',()=>NET.send({t:'pause',on:!LOBBY.paused}));
+    on('tcSpeed',()=>NET.send({t:'speed',v:LOBBY.speed>=3?1:LOBBY.speed+1}));
+    on('tcStop',()=>{if(confirm('結束這一局？'))NET.send({t:'stop'});});
+    on('tcReport',()=>NET.send({t:'history'}));
+    on('tcRec',()=>NET.send({t:'recording'}));
+    on('tcNew',()=>{if(confirm('重新開一局？'))NET.send({t:'newgame'});});
+  }
+}
+function downloadRec(rec){
+  const blob=new Blob([JSON.stringify(rec)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='IHCA錄影_'+(rec.cause||'')+'_'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'')+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+
+/* ═══════════ 報表（含泳道圖） ═══════════ */
+const SPANCOL={cpr:'#E8724B',job:'#3FD0E8',prep:'#3FD0E8',dx:'#9B86EE',drug:'#4CAF6E',
+  air:'#46A0D8',access:'#C8D24A',push:'#7E6FD0',down:'#E0555F',fam:'#B98A5A'};
+const SPANNAME={cpr:'壓胸',prep:'準備器材／抽藥',dx:'找病因（病歷·家屬·超音波）',drug:'給藥／處置',
+  air:'氣道',access:'建立通路',push:'推設備',down:'倒地',fam:'被家屬拉住',job:'其他工作'};
+function drawSwim(cv){
+  if(!HIST)return;
+  const dur=Math.max(60,HIST.tl.length?HIST.tl[HIST.tl.length-1].t:60);
+  const dpr=devicePixelRatio||1,r=cv.getBoundingClientRect();
+  const H=Math.max(560,Math.min(2800,dur*3.6));
+  cv.style.height=H+'px';
+  cv.width=Math.round(r.width*dpr);cv.height=Math.round(H*dpr);
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width;
+  x.fillStyle='#080E12';x.fillRect(0,0,W,H);
+  const padL=46,padR=Math.min(190,Math.max(120,W*0.28)),padT=30,padB=16;
+  const cols=HIST.perPerson.length, cw=(W-padL-padR)/cols;
+  const y0=padT,y1=H-padB,sy=t=>y0+(t/dur)*(y1-y0);
+  x.textAlign='center';
+  HIST.perPerson.forEach((p,i)=>{
+    const cxp=padL+cw*(i+.5);
+    x.fillStyle=p.col;x.font='700 15px sans-serif';
+    x.fillText(p.n+(p.lead?' \u2605':''),cxp,20);
+    x.strokeStyle='rgba(60,80,95,.35)';x.lineWidth=1;
+    x.beginPath();x.moveTo(padL+cw*i,y0-4);x.lineTo(padL+cw*i,y1);x.stroke();});
+  x.beginPath();x.moveTo(padL+cw*cols,y0-4);x.lineTo(padL+cw*cols,y1);x.stroke();
+  x.textAlign='right';x.font='11px ui-monospace,monospace';
+  const stepS=dur>600?120:dur>300?60:30;
+  for(let t=0;t<=dur;t+=stepS){const yy=sy(t);
+    x.strokeStyle='rgba(70,95,110,.28)';x.beginPath();x.moveTo(padL-6,yy);x.lineTo(padL+cw*cols,yy);x.stroke();
+    x.fillStyle='#6D8496';x.fillText(mmt(t),padL-10,yy+4);}
+  const idx={};HIST.perPerson.forEach((p,i)=>idx[p.id]=i);
+  for(const s2 of HIST.acts){
+    const i=idx[s2.id];if(i===undefined)continue;
+    const a=sy(s2.t0),b=Math.max(sy(s2.t1),a+2.5);
+    x.fillStyle=SPANCOL[s2.kind]||'#3FD0E8';
+    x.globalAlpha=s2.kind==='cpr'?.95:.82;
+    const w=cw-14,rx=padL+cw*i+7,ry=a,rh=b-a,rad=Math.min(3,rh/2);
+    x.beginPath();x.moveTo(rx+rad,ry);x.arcTo(rx+w,ry,rx+w,ry+rh,rad);x.arcTo(rx+w,ry+rh,rx,ry+rh,rad);
+    x.arcTo(rx,ry+rh,rx,ry,rad);x.arcTo(rx,ry,rx+w,ry,rad);x.closePath();x.fill();
+    x.globalAlpha=1;
+    if(rh>15){x.fillStyle='rgba(6,12,16,.85)';x.font='10px sans-serif';x.textAlign='left';
+      x.fillText((s2.label||'').slice(0,Math.max(2,Math.floor(w/10))),rx+4,ry+11);x.textAlign='right';}}
+  /* 瞬間事件：講話、下令、放電 */
+  const PC={say:'#6FC8DE',order:'#E8B84B',ack:'#7FE0A8',lead:'#E8B84B',shock:'#FF6B7E'};
+  x.textAlign='left';
+  for(const q of (HIST.pts||[])){
+    const i=idx[q.id];if(i===undefined)continue;
+    const yy=sy(q.t),cxp=padL+cw*i+7,w=cw-14;
+    x.fillStyle=PC[q.kind]||'#6FC8DE';
+    if(q.kind==='shock'){x.fillRect(cxp,yy-2.5,w,5);}
+    else{x.beginPath();x.moveTo(cxp+6,yy-4.5);x.lineTo(cxp+12,yy);x.lineTo(cxp+6,yy+4.5);
+      x.lineTo(cxp,yy);x.closePath();x.fill();
+      x.fillStyle='rgba(190,215,228,.8)';x.font='9.5px sans-serif';
+      x.fillText((q.label||'').slice(0,Math.max(2,Math.floor((w-16)/9))),cxp+15,yy+3.5);}}
+  /* 右側關鍵事件，往下錯開避免重疊 */
+  x.font='11px sans-serif';let lastY=-99;
+  for(const ev of HIST.tl){
+    if(ev.kind!=='key')continue;
+    const yy=sy(ev.t);let ly=Math.max(yy,lastY+13);lastY=ly;
+    x.strokeStyle='rgba(232,184,75,.35)';x.setLineDash([3,3]);x.lineWidth=1;
+    x.beginPath();x.moveTo(padL,yy);x.lineTo(W-padR+4,yy);x.stroke();
+    if(Math.abs(ly-yy)>2){x.beginPath();x.moveTo(W-padR+4,yy);x.lineTo(W-padR+10,ly-3);x.stroke();}
+    x.setLineDash([]);
+    x.fillStyle='#D9C489';
+    const maxc=Math.max(6,Math.floor((padR-16)/11));
+    const t=ev.txt.length>maxc?ev.txt.slice(0,maxc-1)+'…':ev.txt;
+    x.fillText(t,W-padR+12,ly);}
+}
+function renderSheet(){
+  if(!HIST)return;
+  const sh=$('sheet');
+  const rep=HIST.report;
+  const head=HIST.report[0].rows[0][1].indexOf('恢復')===0?'恢復自發循環':'急救結束';
+  let h='<div class="inner"><h3>'+head+'</h3><p class="sub">這些數字全程都藏著，現在才公布。</p>';
+  for(const g of rep){h+='<h4>'+g.g+'</h4>';
+    for(const r of g.rows)h+='<div class="row'+(r[2]?' '+r[2]:'')+'"><span>'+r[0]+'</span><span>'+String(r[1])+'</span></div>';}
+  h+='<h4>誰在什麼時候做了什麼</h4>'
+    +'<canvas id="swim"></canvas>'
+    +'<div class="legend">'+Object.keys(SPANNAME).filter(k=>k!=='job')
+      .map(k=>'<span><i style="background:'+SPANCOL[k]+'"></i>'+SPANNAME[k]+'</span>').join('')
+      +'<span><i style="background:#6FC8DE;border-radius:50%"></i>講話／回報</span>'
+      +'<span><i style="background:#E8B84B;border-radius:50%"></i>Leader 下令與判讀</span>'
+      +'<span><i style="background:#FF6B7E"></i>放電</span></div>';
+  h+='<h4>每個人做了什麼</h4>';
+  for(const p of HIST.perPerson)
+    h+='<div class="row"><span style="color:'+p.col+';font-weight:700">'+p.n+(p.lead?' ★':'')+'</span>'
+      +'<span>壓胸 '+p.cpr+'s · 工作 '+p.jobs+' · 發言 '+p.said+' · 走 '+p.dist+'m</span></div>';
+  h+='<h4>用藥紀錄</h4>';
+  if(!HIST.drugLog.length)h+='<div class="row no"><span>—</span><span>全程沒有給任何藥</span></div>';
+  for(const d of HIST.drugLog)
+    h+='<div class="row"><span>'+mmt(d.t)+'　'+d.n+(d.dose?' '+d.dose+'mg':'')+'</span>'
+      +'<span>'+d.by+' · '+d.rhythm+(d.note?'\n'+d.note:'')+'</span></div>';
+  h+='<h4>電擊紀錄</h4>';
+  if(!HIST.shockLog.length)h+='<div class="row"><span>—</span><span>沒有放電</span></div>';
+  for(const s of HIST.shockLog)
+    h+='<div class="row'+(s.clear?'':' no')+'"><span>'+mmt(s.t)+'　'+s.j+'J　'+s.rhythm+'</span>'
+      +'<span>'+(s.clear?'有喊 clear':'★沒喊 clear')+' · '+(s.conv?'轉律成功':'未轉律')+'（'+s.p+'%）</span></div>';
+  h+='<h4>時間軸</h4>';
+  for(const e of HIST.tl)h+='<div class="tlr'+(e.kind==='key'?' key':'')+'"><span class="tt">'+mmt(e.t)+'</span><span>'+e.txt+'</span></div>';
+  if(HIST.talk.length){h+='<h4>全場的對話與回報</h4>';
+    for(const t of HIST.talk)h+='<div class="talkr"><span class="tt">'+mmt(t.at)+'</span>'
+      +'<b style="color:'+t.col+'">'+t.n+'</b>'+t.txt+'</div>';}
+  h+='<div class="btns"><button id="shCopy">複製報表文字</button>'
+    +'<button id="shDl">下載 .txt</button>'
+    +'<button id="shClose" class="wide">關閉</button></div></div>';
+  sh.innerHTML=h;sh.classList.add('on');
+  requestAnimationFrame(()=>drawSwim($('swim')));
+  $('shCopy').onclick=function(){const t=HIST.text;const b=this;
+    const done=()=>{b.textContent='已複製 ✓';setTimeout(()=>b.textContent='複製報表文字',1800);};
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,()=>fb(t,done));
+    else fb(t,done);
+    function fb(txt,cb){const ta=document.createElement('textarea');ta.value=txt;
+      ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy');cb();}catch(e){}document.body.removeChild(ta);}};
+  $('shDl').onclick=()=>{const blob=new Blob([HIST.text],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='IHCA演練報表.txt';document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);};
+  $('shClose').onclick=()=>sh.classList.remove('on');
+}
+
+/* ═══════════ 重播 ═══════════ */
+const RP={rec:null,G:null,qi:0,end:0,playing:false,speed:2,eye:'a',ready:false};
+function rpLoad(rec){
+  RP.rec=rec;RP.eye='a';
+  /* 先整場跑一次，找出結束的 tick */
+  const probe=IHCA.newState(rec.seed,rec.setup);
+  let qi=0;
+  for(let i=0;i<IHCA.HZ*1000;i++){
+    while(qi<rec.events.length&&rec.events[qi].k<=probe.tick){
+      const e=rec.events[qi++];IHCA.applyAct(probe,e.c,e.a,e.p);}
+    IHCA.use(probe);IHCA.step();
+    if(probe.over)break;}
+  RP.end=probe.tick;
+  RP.finalG=probe;
+  HIST=IHCA.history(probe);
+  rpReset();RP.ready=true;
+  $('rpSeek').max=RP.end;
+  paintReplayBar();
+}
+function rpReset(){
+  RP.G=IHCA.newState(RP.rec.seed,RP.rec.setup);RP.qi=0;G=RP.G;
+  for(const id in MON){MON[id].buf.fill(0);}
+}
+function rpSeek(tick){
+  if(tick<RP.G.tick)rpReset();
+  let guard=0;
+  while(RP.G.tick<tick&&guard++<IHCA.HZ*1200){
+    while(RP.qi<RP.rec.events.length&&RP.rec.events[RP.qi].k<=RP.G.tick){
+      const e=RP.rec.events[RP.qi++];IHCA.applyAct(RP.G,e.c,e.a,e.p);}
+    IHCA.use(RP.G);IHCA.step();
+    RP.G.outbox.length=0;
+  }
+  G=RP.G;
+}
+function rpAdvance(n){
+  for(let i=0;i<n;i++){
+    if(RP.G.tick>=RP.end){RP.playing=false;break;}
+    while(RP.qi<RP.rec.events.length&&RP.rec.events[RP.qi].k<=RP.G.tick){
+      const e=RP.rec.events[RP.qi++];IHCA.applyAct(RP.G,e.c,e.a,e.p);}
+    IHCA.use(RP.G);IHCA.step();
+    if(RP.G.outbox.length){
+      for(const o of RP.G.outbox)if(!o.who||o.who===RP.eye)toast(o.m,!!o.who);
+      RP.G.outbox.length=0;}
+  }
+  G=RP.G;
+}
+function paintReplayBar(){
+  if(!REPLAY||!RP.ready)return;
+  $('rpPlay').textContent=RP.playing?'❚❚':'▶';
+  $('rpTime').textContent=mmt(RP.G.t)+' / '+mmt(RP.end/IHCA.HZ);
+  const sk=$('rpSeek');if(document.activeElement!==sk)sk.value=RP.G.tick;
+  const eyes=$('rpEyes');
+  const want=RP.G.ch.filter(z=>z.active!==false).map(c=>c.id+':'+c.n).join(',');
+  if(eyes.dataset.w!==want){eyes.dataset.w=want;eyes.innerHTML='';
+    for(const c of RP.G.ch.filter(z=>z.active!==false)){const b=document.createElement('button');
+      b.textContent=c.n;b.style.color=c.c;b.className=(RP.eye===c.id?'on':'');
+      b.onclick=()=>{RP.eye=c.id;ME=c.id;[...eyes.children].forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');};
+      eyes.appendChild(b);}}
+}
+function setupReplayUI(){
+  $('rpPlay').onclick=()=>{RP.playing=!RP.playing;paintReplayBar();};
+  $('rpSeek').oninput=e=>{RP.playing=false;rpSeek(Number(e.target.value));paintReplayBar();};
+  document.querySelectorAll('.rpS').forEach(b=>b.onclick=()=>{
+    RP.speed=Number(b.dataset.v);
+    document.querySelectorAll('.rpS').forEach(x=>x.classList.remove('on'));b.classList.add('on');});
+  $('rpReport').onclick=()=>{if(HIST)renderSheet();};
+}
+function replayGate(){
+  const e=$('gate');e.classList.add('on');
+  e.innerHTML='<div class="inner"><h1>重播播放器</h1>'
+   +'<p>載入一場演練的錄影檔（.json）。檔案很小，因為它只記了隨機種子和每一個操作，'
+   +'播放時是把整場重新算一次 — 所以可以隨意拉時間軸、變速、切換看任何一個人的視角。</p>'
+   +'<div class="lab">從電腦選檔案</div>'
+   +'<input type="file" id="rpFile" accept="application/json" style="width:100%;padding:14px;background:#141C24;border:1px solid #34485A;border-radius:12px;color:#DCE6EE">'
+   +'<div class="lab">或選伺服器上的錄影</div><div id="rpList" style="display:flex;flex-direction:column;gap:7px"></div>'
+   +'</div>';
+  $('rpFile').onchange=ev=>{
+    const f=ev.target.files[0];if(!f)return;
+    const rd=new FileReader();
+    rd.onload=()=>{try{rpLoad(JSON.parse(rd.result));e.classList.remove('on');}
+      catch(err){alert('這個檔案讀不出來：'+err.message);}};
+    rd.readAsText(f);};
+  if(!isFile)fetch('/recordings').then(r=>r.json()).then(list=>{
+    const box=$('rpList');
+    if(!list.length){box.innerHTML='<p style="color:#8296A8;font-size:13px">伺服器上還沒有錄影檔。</p>';return;}
+    box.innerHTML='';
+    for(const f of list){const b=document.createElement('button');
+      b.textContent=f;b.style.minHeight='44px';
+      b.onclick=()=>fetch('/recordings/'+f).then(r=>r.json()).then(rec=>{rpLoad(rec);e.classList.remove('on');});
+      box.appendChild(b);}
+  }).catch(()=>{});
+}
+
+/* ═══════════ 輸入 ═══════════ */
+const cv=$('cv'),cx=cv.getContext('2d');
+$('mode').style.display='none';
+$('spd').onclick=()=>{if(SOLO){speed=({1:2,2:3,3:1})[speed];$('spd').textContent='速度 '+speed+'×';}};
+$('pausebtn').onclick=()=>{if(SOLO&&LOCAL){soloCtl('__pause',{on:!LOCAL.paused});
+  $('pausebtn').classList.toggle('on',LOCAL.paused);
+  $('pausebtn').textContent=LOCAL.paused?'▶ 繼續':'⏸ 暫停';paint();}};
+$('ordb').onclick=()=>NET.act('ack');
+if(MODE==='player'||REPLAY){$('spd').style.display='none';$('pausebtn').style.display='none';}
+if(MODE==='host'||MODE==='teacher')$('stick').style.display='none';
+/* ═══ 浮動搖桿：按住病房畫面任何位置拖曳就能走；輕點＝走到那個站位 ═══ */
+const stk=$('stick'),knob=$('knob');
+let jId=null,jSt=null,jMoved=false,jT0=0,_jt=0;
+const JR=52;
+function toWorld(e){const r=cv.getBoundingClientRect(),sc=Math.min(r.width/K.W,r.height/K.H);
+  return{x:((e.clientX-r.left)-(r.width-K.W*sc)/2)/sc,y:((e.clientY-r.top)-(r.height-K.H*sc)/2)/sc,r};}
+function showStick(cx0,cy0){const r=cv.getBoundingClientRect();
+  stk.style.left=(cx0-r.left)+'px';stk.style.top=(cy0-r.top)+'px';
+  knob.style.left='41px';knob.style.top='41px';stk.classList.add('on');}
+function moveKnob(dx,dy){knob.style.left=(41+dx)+'px';knob.style.top=(41+dy)+'px';}
+function hideStick(){stk.classList.remove('on');}
+cv.addEventListener('pointerdown',e=>{
+  if(!G||REPLAY||MODE==='host'||MODE==='teacher')return;
+  ac();
+  if(!meC())return;
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+  jId=e.pointerId;jSt={x:e.clientX,y:e.clientY};jMoved=false;jT0=performance.now();
+  showStick(e.clientX,e.clientY);
+  e.preventDefault();
+},{passive:false});
+cv.addEventListener('pointermove',e=>{
+  if(e.pointerId!==jId||!jSt)return;
+  let dx=e.clientX-jSt.x,dy=e.clientY-jSt.y,d=Math.hypot(dx,dy);
+  if(d>12)jMoved=true;
+  if(d>JR){dx=dx/d*JR;dy=dy/d*JR;d=JR;}
+  moveKnob(dx,dy);
+  if(!jMoved)return;
+  const now=performance.now();if(now-_jt<80)return;_jt=now;
+  NET.act('move',{dx:dx/JR,dy:dy/JR});
+  e.preventDefault();
+},{passive:false});
+function endStick(e){
+  if(e.pointerId!==jId)return;
+  hideStick();
+  const quick=performance.now()-jT0<400;
+  if(!jMoved&&quick){                       /* 輕點 = 走過去 */
+    const w=toWorld(e);
+    if(SOLO){for(const c of G.ch)if(c.active!==false&&Math.hypot(w.x-c.x,w.y-(c.y-22))<38){ME=c.id;sub=null;jId=null;jSt=null;paint();return;}}
+    let best=null,bd=1e9;
+    for(const k in K.ST){const st2=K.ST[k];
+      if(Math.abs(w.x-st2.x)<st2.w/2+40&&Math.abs(w.y-st2.y)<st2.h/2+40){
+        const d2=Math.hypot(w.x-st2.x,w.y-st2.y);if(d2<bd){bd=d2;best={t:'s',k};}}}
+    for(const k in G.eq){const q=G.eq[k];
+      if(Math.abs(w.x-q.x)<q.w/2+40&&Math.abs(w.y-q.y)<q.h/2+46){
+        const d2=Math.hypot(w.x-q.x,w.y-q.y);if(d2<bd){bd=d2;best={t:'e',k};}}}
+    if(best)NET.act('goto',{k:best.k});
+    else NET.act('gotoXY',{x:w.x,y:w.y});
+  }else NET.act('stop');
+  jId=null;jSt=null;paint();
+}
+cv.addEventListener('pointerup',endStick);
+cv.addEventListener('pointercancel',e=>{hideStick();if(e.pointerId===jId){NET.act('stop');jId=null;jSt=null;}});
+
+/* 音效 */
+let AC=null;
+function ac(){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();
+  if(AC.state==='suspended')AC.resume();}catch(e){}return AC;}
+function tone(f,d,ty,v,sl){try{const a=ac(),o=a.createOscillator(),g=a.createGain();o.type=ty||'sine';
+ o.frequency.setValueAtTime(f,a.currentTime);if(sl)o.frequency.exponentialRampToValueAtTime(sl,a.currentTime+d);
+ g.gain.setValueAtTime(0,a.currentTime);g.gain.linearRampToValueAtTime(v||.12,a.currentTime+.008);
+ g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+d);o.connect(g);g.connect(a.destination);
+ o.start();o.stop(a.currentTime+d+.05);}catch(e){}}
+function noiz(d,v){try{const a=ac(),n=a.sampleRate*d,b=a.createBuffer(1,n,a.sampleRate),ch=b.getChannelData(0);
+ for(let i=0;i<n;i++)ch[i]=(Math.random()*2-1)*(1-i/n);const s2=a.createBufferSource(),g=a.createGain();
+ s2.buffer=b;g.gain.value=v||.2;s2.connect(g);g.connect(a.destination);s2.start();}catch(e){}}
+const SFX={tick:()=>tone(1180,.035,'square',.05),t30:()=>tone(1520,.1,'square',.11),
+ chg:()=>tone(430,2.9,'sawtooth',.075,1750),ok:()=>{tone(720,.09,'sine',.1);setTimeout(()=>tone(1080,.12,'sine',.1),80);},
+ zap:()=>{noiz(.22,.3);tone(80,.28,'square',.16);},breath:()=>tone(340,.28,'sine',.07,220),
+ alarm:()=>{tone(880,.1,'square',.08);setTimeout(()=>tone(880,.1,'square',.08),160);},
+ rosc:()=>{[660,880,1170].forEach((f,i)=>setTimeout(()=>tone(f,.18,'sine',.11),i*110));},
+ bcast:()=>{tone(600,.08,'sine',.09);setTimeout(()=>tone(900,.1,'sine',.09),80);setTimeout(()=>tone(1200,.12,'sine',.09),170);}};
+let W_={cnt:0,shocks:0,check:0,charged:false,down:0,air:'BVM',order:null,rosc:false,clues:0};
+function sfxWatch(){
+  if(!G||MODE==='teacher')return;
+  if(G.cnt!==W_.cnt){if(G.cnt>W_.cnt)SFX.tick();W_.cnt=G.cnt;}
+  if(G.needPause&&!W_.need)SFX.t30(); W_.need=G.needPause;
+  if(G.shocks>W_.shocks){SFX.zap();W_.shocks=G.shocks;}
+  if(G.df.charged&&!W_.charged)SFX.ok(); W_.charged=G.df.charged;
+  if(G.check>0&&W_.check<=0)SFX.alarm(); W_.check=G.check;
+  if(G.clues.length>W_.clues){SFX.ok();W_.clues=G.clues.length;}
+  if(G.air!==W_.air){G.air==='ETT'?SFX.ok():SFX.alarm();W_.air=G.air;}
+  if(G.rosc&&!W_.rosc)SFX.rosc(); W_.rosc=G.rosc;
+  const d=G.ch.filter(c=>c.down>0).length; if(d>W_.down)SFX.alarm(); W_.down=d;
+  const ot=G.order?G.order.txt+G.order.at:null;
+  if(ot&&ot!==W_.order)SFX.bcast(); W_.order=ot;
+  if(G.pauseVent&&G.breaths>0&&G.breaths!==W_.br)SFX.breath(); W_.br=G.breaths;
+}
+
+/* ═══════════ 畫面總更新 ═══════════ */
+let _lastFeedH='',_askedHist=0;
+function paint(){
+  if(!G)return;
+  paintWho();
+  const o=$('ord');
+  if(G.order&&MODE!=='teacher'){o.classList.add('on');
+    $('ordx').textContent=G.order.txt+(G.order.ack.length?'　（'+G.order.ack.map(i=>C(i).n).join('、')+' 已複誦）':'');
+    const mine=G.order.by===ME,done=G.order.ack.includes(ME);
+    $('ordb').style.display=(mine||MODE==='host'||REPLAY)?'none':'';
+    $('ordb').textContent=done?'已複誦':'收到';$('ordb').disabled=done;}
+  else o.classList.remove('on');
+  const fh=[...G.feed].reverse().map(f=>
+    '<div class="f'+(f.big?' big':'')+'" data-k="'+f.at+f.n+'"><b style="color:'+f.col+'">'
+    +f.n+'</b>'+f.txt+'</div>').join('');
+  if(fh!==_lastFeedH){
+    const seen=new Set([...$('feed').children].map(x=>x.dataset.k));
+    _lastFeedH=fh;$('feed').innerHTML=fh;
+    [...$('feed').children].forEach(x=>{if(!seen.has(x.dataset.k))x.classList.add('new');});}
+  if(MODE==='player'||SOLO){paintYouAre();buildPanel();}
+  if(G.over&&(SOLO||REPLAY)&&!HIST){HIST=IHCA.history(SOLO?LOCAL:RP.finalG);renderSheet();}
+  if(G.over&&!SOLO&&!REPLAY&&!HIST&&!_askedHist){_askedHist=1;NET.send({t:'history'});}
+}
+
+/* ═══════════ 主迴圈 ═══════════ */
+let last=0,acc=0,accSim=0;
+function loop(ts){
+  const dt0=Math.min(.06,(ts-last)/1000||0);last=ts;
+  if(SOLO&&LOCAL&&!LOCAL.over&&!LOCAL.paused){
+    accSim+=dt0*speed;
+    let n=0;while(accSim>=IHCA.DT&&n<20){IHCA.use(LOCAL);IHCA.step();accSim-=IHCA.DT;n++;}
+    if(LOCAL.outbox.length){for(const e of LOCAL.outbox)if(!e.who||e.who===ME)toast(e.m,!!e.who);
+      LOCAL.outbox.length=0;}
+    G=LOCAL;
+  }
+  if(REPLAY&&RP.ready&&RP.playing){
+    accSim+=dt0*RP.speed;
+    let n=0;while(accSim>=IHCA.DT&&n<60){rpAdvance(1);accSim-=IHCA.DT;n++;}
+  }
+  if(G){
+    pushMon(dt0*(SOLO?speed:(REPLAY&&RP.playing?RP.speed:1)));
+    pushStrip(dt0);
+    sfxWatch();
+    drawWard(cx,cv,ME);
+    drawMon();paintMonNums();paintStrip();
+    const meNow=meC();
+    const atRec=meNow?nearEq(meNow)==='pc':false;
+    const showT=(MODE==='host'||MODE==='teacher'||REPLAY)?true:atRec;
+    $('clk').textContent=showT?mmt(G.t):'‑‑:‑‑';
+    $('sub').textContent=showT
+      ? (G.check>0?('第 '+G.round+' 次心律檢查中'):('距上次檢查 '+mmt(G.sinceCheck)))
+      : ((meNow?meNow.n:'你')+' 看不到急救時間 — 要到電腦車前面');
+  }
+  if(toastT>0){toastT-=dt0;if(toastT<=0)$('toast').classList.remove('on');}
+  acc+=dt0;if(acc>.1){acc=0;paint();if(REPLAY)paintReplayBar();}
+  requestAnimationFrame(loop);
+}
+function afterSnap(){ if(MODE==='player')paintGate(); }
+
+/* ═══════════ 啟動 ═══════════ */
+if(REPLAY){setupReplayUI();replayGate();}
+else if(SOLO){
+  soloNew({});ME='a';
+  $('gate').classList.add('on');
+  $('gate').innerHTML='<div class="inner"><h1>單機測試版</h1>'
+   +'<p>一台裝置操作六個人，用來測試流程。下面選好情境按開始。'
+   +'多人版請在筆電上跑 <code>node server.js</code>。</p>'
+   +'<div class="lab">這一場有幾個人</div><div class="g" id="sN"></div>'
+   +'<div class="lab">病人身上有沒有點滴</div><div class="g" id="sD"></div>'
+   +'<div class="lab">一開始的心律</div><div class="g" id="sR"></div>'
+   +'<div class="lab">真正的病因</div><div class="g" id="sC"></div>'
+   +'<div style="margin-top:22px"><button class="go" style="width:100%;min-height:58px;font-size:16px" id="sGo">開始</button></div></div>';
+  const st={drip:'none',rhythm:'rand',cause:'rand',n:6};
+  const mk=(box,items,key)=>{const el=$(box);el.style.display='grid';
+    el.style.gridTemplateColumns='1fr 1fr';el.style.gap='8px';
+    el.innerHTML='';for(const it of items){const b=document.createElement('button');
+      b.style.minHeight='54px';b.innerHTML=it.n;b.className=st[key]===it.id?'on':'';
+      b.style.borderColor=st[key]===it.id?'#3FD0E8':'';
+      b.onclick=()=>{st[key]=it.id;mk(box,items,key);};el.appendChild(b);}};
+  mk('sN',[3,4,5,6].map(k=>({id:k,n:k+' 人'})),'n');
+  mk('sD',K.DRIPS,'drip');
+  mk('sR',[{id:'rand',n:'隨機'}].concat(K.STARTRHY.map(id=>({id,n:RH(id).n}))),'rhythm');
+  mk('sC',[{id:'rand',n:'隨機（學員猜）'}].concat(K.CAUSES.map(c=>({id:c.id,n:c.n}))),'cause');
+  $('sGo').onclick=()=>{ac();soloNew(st);soloCtl('__start');$('gate').classList.remove('on');paint();};
+}
+else{NET.connect();}
+requestAnimationFrame(loop);
+</script>

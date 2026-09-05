@@ -1,0 +1,12 @@
+{
+  "name": "ihca-team-resuscitation",
+  "version": "3.1.0",
+  "description": "IHCA 團隊復甦模擬器 — 急診 TRM 教學用多人版",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tunnel": "node server.js --tunnel"
+  },
+  "engines": { "node": ">=18" },
+  "private": true
+}
