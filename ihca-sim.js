@@ -160,7 +160,7 @@ function newState(seed,setup){
     num:0,den:0,pause:0,maxPause:0,sinceCheck:0,maxGap:0,lateWarn:0,
     pulseChecks:0,cprMoved:0,swaps:0,zapped:0,exhausted:0,leads:false,timeShown:0,
     tray:[],probeHolder:null,
-    family:{x:640,y:330,line:0,lt:0,gone:false,pull:38},famOut:null,famDelays:0,
+    family:{x:640,y:330,line:0,lt:0,gone:false,pull:40*(6/Math.max(2,NP))},famOut:null,famDelays:0,
     eq:JSON.parse(JSON.stringify(K.EQ0)),
     np:NP,
     ch:K.SLOTS.map((c,i)=>({...c,active:i<NP,n:names[c.id]||c.id.toUpperCase(),
@@ -651,7 +651,8 @@ function step(){
   if(S.fixed&&!S.rosc&&!S.over&&S.air!=='bad'&&!RH(S.rhythm).shock){
     if(S.t-S.tFixed>=(S.cause.delay||60)&&ccfNow()>=.5){
       S.rosc=true;S.roscAt=S.t;S.rhythm='sinus';S.roscHR=104+Math.floor(rnd()*18);
-      say('EtCO₂ 突然跳上來，螢幕出現規則心律 — 有人去摸脈搏。');
+      say(S.air==='ETT'?'EtCO₂ 突然跳上來，螢幕出現規則心律 — 有人去摸脈搏。'
+                       :'螢幕上突然變成規則的心律 — 有人去摸脈搏。');
       tl('生理上恢復自發循環（團隊尚未確認）','key');}
   }
   if(S.rosc&&!S.roscKnown&&S.cprAfterRosc>=45){
@@ -659,7 +660,8 @@ function step(){
     S.fixed=true;S.tFixed=S.t;S.roscFelt=false;S.roscHint=0;
     say('在已經有脈搏的心臟上繼續壓胸 — 病人又停了。');tl('ROSC 後持續壓胸導致再停止','key');}
   if(S.rosc&&!S.roscKnown&&S.cprAfterRosc>18&&!S.roscHint){S.roscHint=1;
-    say('EtCO₂ 一直維持在 40 上下、螢幕是規則心律 — 有人該去摸脈搏。');}
+    say(S.air==='ETT'?'EtCO₂ 一直維持在 40 上下、螢幕是規則心律 — 有人該去摸脈搏。'
+                     :'螢幕上一直是規則的心律 — 有人該去摸脈搏。');}
   if(S.phase==='post')S.roscSp=Math.min(97,S.roscSp+dt*0.8);
 
   for(const c of AC())if(c.act>0)c.act-=dt;
@@ -732,7 +734,7 @@ function step(){
     if(S.family.x>612)S.family.x-=dt*2.2;
     if(S.family.y<352)S.family.y+=dt*1.4;
     S.family.pull-=dt;
-    if(S.family.pull<=0){S.family.pull=40;
+    if(S.family.pull<=0){S.family.pull=40*(6/Math.max(2,AC().length));
       const near=AC().filter(o=>!o.down&&!o.busy&&Math.hypot(o.x-S.family.x,o.y-S.family.y)<175);
       if(near.length){const o=near[0];
         o.busy={l:K.FAMPULL[Math.floor(rnd()*K.FAMPULL.length)],r:2.6,d:2.6,fn:null};
@@ -778,16 +780,16 @@ function ecgAt(G,t,clean){
 }
 function physOf(G){
   const on=!!(G.cpr&&!G.pauseVent&&!G.holdCpr&&G.check<=0),R=RH(G.rhythm);
+  const hr0=R.org?R.rate:null;
+  /* 沒有進階氣道就沒有 capnography —— 插管之前螢幕上不會有 EtCO₂ */
+  if(G.air==='BVM')return{hr:G.rosc?G.roscHR:hr0,sp:G.rosc?Math.round(G.roscSp):null,co2:null};
   if(G.rosc)return{hr:G.roscHR,sp:Math.round(G.roscSp),co2:G.roscCo};
-  const hr=R.org?R.rate:null;
-  if(G.air==='bad')return{hr,sp:null,co2:0};
+  if(G.air==='bad')return{hr:hr0,sp:null,co2:0};
   const cc=G.cpr?G.ch.find(x=>x.id===G.cpr):null;
   let q=(on&&cc)?Math.max(.15,1-cc.fat*.62):0;
   if(G.coach>0)q=Math.min(1,q*1.30);
-  const cap=G.air==='ETT'?24:18;
-  const jit=G.air==='ETT'?0:(nzf(Math.floor(G.t*2))*4-2);
-  const co2=on?Math.max(3,Math.round(cap*q+jit)):0;
-  return{hr,sp:null,co2};
+  const co2=on?Math.max(3,Math.round(24*q)):0;
+  return{hr:hr0,sp:null,co2};
 }
 function co2At(G,t){
   const p=physOf(G);if(!p.co2)return 0;
@@ -927,20 +929,44 @@ function applyAct(G,cid,act,params){
 }
 /* 給某個玩家看的狀態：別人的線索內容要遮起來 */
 function snapshotFor(G,cid){
-  const o={};
-  const SKIP={_rng:1,log:1,outbox:1,talk:1,tl:1,acts:1,checks:1,drugLog:1,shockLog:1,
-              epiTimes:1,ackDelay:1,amioLog:1,cause:1};
-  for(const k in G){if(SKIP[k])continue;o[k]=G[k];}
-  /* 病因內容（含三條線索原文）絕對不能提前送到客戶端 */
-  o.cause=G.over?{id:G.cause.id,n:G.cause.n,fixLabel:G.cause.fixLabel,delay:G.cause.delay}
-                :{id:null,n:null,fixLabel:null,delay:null};
+  /* 快照要小 —— 手機是透過網路收的，每一個位元組都會變成延遲。
+     只送畫面真的用得到的欄位，座標四捨五入到小數一位。 */
+  const r1=v=>Math.round(v*10)/10, r2=v=>Math.round(v*100)/100;
+  const o={
+    tick:G.tick, t:r1(G.t), anim:r2(G.anim), over:G.over, phase:G.phase, paused:G.paused,
+    np:G.np, patient:G.patient, drip:G.drip,
+    rhythm:G.rhythm, decay:r1(G.decay), leads:G.leads, air:G.air,
+    cpr:G.cpr, pauseVent:G.pauseVent, holdCpr:G.holdCpr, cnt:G.cnt, needPause:G.needPause,
+    breaths:G.breaths, noVentT:r1(G.noVentT), coach:r1(G.coach),
+    check:r1(G.check), round:G.round, sinceCheck:r1(G.sinceCheck), timeShown:r1(G.timeShown),
+    checkRec:G.checkRec?{pulse:G.checkRec.pulse,call:G.checkRec.call}:null,
+    clearAt:r1(G.clearAt), shocks:G.shocks,
+    df:{j:G.df.j,sync:G.df.sync,charged:G.df.charged,chargeT:r1(G.df.chargeT),holder:G.df.holder},
+    iv:G.iv, ivFixed:G.ivFixed, ivRoute:G.ivRoute, caths:G.caths,
+    rosc:G.rosc, roscFelt:G.roscFelt, roscKnown:G.roscKnown, roscHR:G.roscHR, roscSp:r1(G.roscSp), roscCo:G.roscCo,
+    nibp:{r:r1(G.nibp.r),val:G.nibp.val,n:G.nibp.n},
+    leader:G.leader, probeHolder:G.probeHolder,
+    order:G.order?{txt:G.order.txt,by:G.order.by,at:r1(G.order.at),ack:G.order.ack}:null,
+    tray:G.tray, family:{x:r1(G.family.x),y:r1(G.family.y),line:G.family.line,gone:G.family.gone},
+    feed:G.feed, nTalk:G.talk.length,
+    cause:G.over?{id:G.cause.id,n:G.cause.n,fixLabel:G.cause.fixLabel,delay:G.cause.delay}
+                :{id:null,n:null,fixLabel:null,delay:null},
+    eq:{}
+  };
+  for(const k in G.eq){const e=G.eq[k];
+    o.eq[k]={n:e.n,x:r1(e.x),y:r1(e.y),w:e.w,h:e.h,col:e.col,dark:e.dark,cable:e.cable};}
   o.ch=G.ch.filter(c=>c.active).map(function(c){
-    const d={};for(const k in c){if(k==='span')continue;d[k]=c[k];}return d;});
+    return {id:c.id,c:c.c,coat:c.coat,n:c.n,online:c.online,active:true,
+      x:r1(c.x),y:r1(c.y),bob:r2(c.bob),moving:c.moving,
+      hold:c.hold,dose:c.dose,ettSpec:c.ettSpec,push:c.push,
+      down:c.down>0?r1(c.down):0,downWhy:c.downWhy,zap:c.zap>0?r2(c.zap):0,
+      act:c.act>0?r2(c.act):0,fat:r2(c.fat),slow:c.slow,
+      busy:c.busy?{l:c.busy.l,r:r1(c.busy.r),d:c.busy.d}:null,
+      bubble:(c.bubble&&c.bubble.lines)?{lines:[c.bubble.lines[c.bubble.i]],i:0}:null,
+      recent:(c.id===cid)?c.recent:null};});
   o.clues=G.clues.map(function(q){
     const seen=q.cast||q.known.indexOf(cid)>=0;
-    return{src:q.src,t:q.t,cast:q.cast,known:q.known,txt:seen?q.txt:null};});
-  o.feed=G.feed;
-  o.nTalk=G.talk.length;
+    return{src:q.src,t:r1(q.t),cast:q.cast,known:q.known,txt:seen?q.txt:null};});
   return o;
 }
 function history(G){return{talk:G.talk,tl:G.tl,acts:G.acts,pts:G.pts,checks:G.checks,

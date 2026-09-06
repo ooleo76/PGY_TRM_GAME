@@ -1,4 +1,4 @@
-# IHCA 團隊復甦模擬器 v3.1 — 多人版
+# IHCA 團隊復甦模擬器 v3.2 — 多人版
 
 給急診 UGY / PGY 的 TRM（團隊資源管理）教學用。
 學員各拿一支手機，投影幕放全景，教師另有一台控制台。
@@ -26,7 +26,8 @@
 | `ihca-sim.js` | 模擬核心，伺服器與瀏覽器共用 |
 | `qr.js` | QR code 產生器（自己寫的，不需要連外） |
 | `ihca-client.html` | 客戶端，同一個檔案切換五種模式 |
-| `package.json` / `Dockerfile` / `render.yaml` / `fly.toml` | 雲端部署用 |
+| `package.json` / `render.yaml` | 雲端部署用 |
+| `extras/` | 給 Fly.io 等其他平台的 Dockerfile（Render 用不到） |
 | `recordings/` | 錄影檔自動存在這裡 |
 
 事前只要裝一次 **Node.js**（<https://nodejs.org> 下載 LTS 版，一直按下一步）。
@@ -62,37 +63,74 @@ node server.js --tunnel
 
 適合「每次上課都是同一個網址」、或你不想在上課時多開一個終端機。
 
-1. 到 <https://github.com> 註冊（如果還沒有帳號），建一個新的 repository，
-   把這個資料夾裡的檔案全部上傳（網頁上直接拖曳就可以）。
-2. 到 <https://render.com> 用 GitHub 帳號登入 → **New +** → **Web Service**
-   → 選剛剛那個 repository。
-3. 設定頁面填：
-   - **Runtime**：Node
-   - **Build Command**：留空
-   - **Start Command**：`node server.js`
-   - **Instance Type**：Free
-4. 展開 **Advanced** → **Add Environment Variable**，加兩個：
+#### 1. 先把檔案放到 GitHub
 
-   | Key | Value |
-   |---|---|
-   | `ROOM` | 你要的四位數房間代碼，例如 `2468` |
-   | `TKEY` | 你自己想一組英數字當教師金鑰，例如 `emed2026` |
+到 <https://github.com> 註冊 → 右上角 **+** → **New repository** →
+取個名字（例如 `ihca`）→ **Public** → **Create repository**。
 
-5. 按 **Create Web Service**，等一兩分鐘，會拿到一個像
-   `https://ihca-xxxx.onrender.com` 的固定網址。
+進到新建好的頁面，點 **uploading an existing file**，
+把 `ihca-v3.1` 資料夾裡的檔案**全部拖進去**（包含 `recordings` 資料夾），
+最下面按 **Commit changes**。
+
+> `extras` 資料夾裡的 Dockerfile 是給別的平台用的，Render 不需要，
+> 但它放在子資料夾裡不會干擾，一起上傳也沒關係。
+
+#### 2. 在 Render 建立服務
+
+到 <https://render.com> 用 GitHub 帳號登入 → **New +** → **Web Service**
+→ 選剛剛那個 repository → **Connect**。
+
+接下來是**一頁很長的表單**，由上往下依序是：
+
+| 欄位 | 要填什麼 |
+|---|---|
+| **Name** | 隨便取，例如 `ihca` |
+| **Project** | 可以不管 |
+| **Language** | **選 `Node`** ← 這一格以前叫 Runtime，現在叫 **Language** |
+| **Branch** | `main`（預設值就對） |
+| **Region** | 選 `Singapore` 或 `Oregon` 都可以 |
+| **Root Directory** | **留空** |
+| **Build Command** | 預設會自動填 `npm install`，**不用改** |
+| **Start Command** | 預設會自動填 `npm start`，**不用改**（`package.json` 裡已經指向 `node server.js`） |
+| **Instance Type** | 往下捲，選 **Free**（`$0/month`） |
+
+> **找不到 Build Command / Start Command 那兩格？**
+> 那是因為 **Language 被設成 `Docker`** 了 —— Render 一看到 repository 裡有
+> `Dockerfile` 就會自動切成 Docker 模式，這兩格就整個消失。
+> 把 **Language 改回 `Node`**，欄位就會出現。
+>
+> （v3.1 之後我已經把 `Dockerfile` 移到 `extras/` 子資料夾，正常不會再發生。）
+
+#### 3. 加兩個環境變數
+
+同一頁往下找到 **Environment Variables**（舊版藏在 **Advanced** 裡面），
+按 **Add Environment Variable**，加這兩組：
+
+| Key（名稱） | Value（值） |
+|---|---|
+| `ROOM` | 你要的四位數房間代碼，例如 `2468` |
+| `TKEY` | 你自己想一組英數字當教師金鑰，例如 `emed2026` |
+
+#### 4. 建立
+
+最下面按 **Deploy Web Service**（有些版本叫 **Create Web Service**）。
+等一兩分鐘，畫面上方會出現一個像
+`https://ihca-xxxx.onrender.com` 的固定網址。
 
 以後上課只要開：
 
 * 投影幕 `https://你的網址/?m=host&k=emed2026`
 * 教師 　 `https://你的網址/?m=teacher&k=emed2026`
-* 學員 　 掃投影幕上的 QR code
+* 學員 　 掃投影幕上的 QR code（代碼會自動帶入）
 
 > **免費方案會睡著**：15 分鐘沒人用會休眠，下次開要等 30–60 秒醒來。
 > 上課前 5 分鐘先開一下投影幕那個網址就好。
-> 另外免費方案的硬碟是暫時的，錄影檔請在課後用教師控制台的「下載錄影檔」帶走。
+>
+> **錄影檔要當天帶走**：免費方案的硬碟是暫時的，重新部署或休眠後會清空。
+> 課後請用教師控制台的「下載錄影檔」存到自己電腦。
 
-（`render.yaml`、`Dockerfile`、`fly.toml` 都已經放在資料夾裡，
-想改用 Fly.io 或其他平台也可以直接吃。）
+> 卡在任何一步都沒關係 —— **A 方案（`node server.js --tunnel`）完全不需要
+> GitHub 和 Render，上課效果一模一樣**，只是網址每次不同而已。
 
 ### C. 同一個 WiFi（最單純，但你的情境用不到）
 
@@ -148,6 +186,8 @@ node server.js
 * **面板最上面一行**永遠寫著「你在：床左」「手上：留置針」，抬頭看完螢幕低頭一眼就知道。
 * **動作分三層**：① 現在能做的處置 → ② 溝通 → ③ 準備與雜項。
   要救人的按鈕永遠在最上面。
+* **按鈕按下去會震一下並閃一下**，不用等伺服器回話才知道有沒有按到。
+* 走路是在手機上**先動起來**再跟伺服器對齊，所以網路慢的時候也不會有拖延感。
 
 ---
 
@@ -155,7 +195,7 @@ node server.js
 
 開 `…/?m=replay`，選伺服器上的錄影檔或從電腦上傳 `.json`。
 
-錄影檔只有幾 KB —— 它記的是**隨機種子加上每一個操作**，播放時把整場重新算一次。
+錄影檔只有幾十 KB —— 它記的是**隨機種子加上每一個操作**，播放時把整場重新算一次。
 所以可以：
 
 * 任意拉時間軸（往前往後都可以）
@@ -177,6 +217,7 @@ node server.js
 | 留置針只有 3 根、一次只能拿一樣東西、壓胸會累 | Resource management |
 | **摸脈搏的結果只有摸的人知道**，要喊出來團隊才會停手 | Closed-loop / ROSC 辨識 |
 | NIBP 任何人在床邊都能量，結果全隊都看得到 | 客觀證據 vs 個人感受 |
+| 插管之前沒有 EtCO₂，壓胸品質沒有儀器可看 | 進階氣道的價值 |
 | 心律檢查停 15 秒、跳出乾淨的大張心電圖，Leader 必須宣告可／不可電擊 | 心律判讀與決策 |
 | 沒喊 CLEAR 就放電會電到人；有喊則多數人來得及放手 | 病人與團隊安全 |
 | 家屬會靠近、拉住人、讓所有工作變慢 35% | 現場管理與家屬溝通 |
@@ -192,8 +233,13 @@ node server.js
 
 ROSC 條件：病因已解除 **且** 管路正確 **且** 起效時間到 **且** CCF ≥ 50%
 **且** 目前不是可電擊節律。
-達成後病人生理上恢復循環，但**團隊不會自動知道** —— EtCO₂ 跳到 40、螢幕變規則心律，
-要有人去摸脈搏並喊出來。沒發現而繼續壓胸 45 秒，病人會再度停止。
+達成後病人生理上恢復循環，但**團隊不會自動知道** —— 螢幕變成規則心律
+（已插管的話 EtCO₂ 還會跳到 40），要有人去摸脈搏並喊出來。
+沒發現而繼續壓胸 45 秒，病人會再度停止。
+
+> **插管之前螢幕上沒有 EtCO₂**（BVM 沒有接 capnometer）。
+> 也就是說，壓胸品質的客觀回饋要等到建立進階氣道之後才看得到 —— 這是真實情況，
+> 也是「早點把氣道處理好」的隱性理由。
 
 ---
 

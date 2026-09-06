@@ -1,7 +1,7 @@
 /* 產生一場完整、大致做對的演練錄影 — 用來檢查報表、泳道圖與重播 */
 const A=require('./ihca-sim.js'),fs=require('fs');
 const seed=Number(process.argv[2]||20260905);
-const setup={drip:'none',rhythm:'VF',cause:'k',names:{a:'季',b:'恆',c:'明',d:'華',e:'安',f:'瑄'}};
+const setup={drip:'none',rhythm:'VF',cause:'k',n:6,names:{a:'季',b:'恆',c:'明',d:'華',e:'安',f:'瑄'}};
 const G=A.newState(seed,setup);const ev=[];
 const P=id=>G.ch.find(c=>c.id===id);
 function act(cid,a,p){if(A.applyAct(G,cid,a,p))ev.push({k:G.tick,c:cid,a,p:p||null});}

@@ -148,7 +148,12 @@ function onClose(ws){
   if(!R)return;
   const id=ws.meta.slot;
   if(id&&R.slots[id]&&R.slots[id].ws===ws){R.slots[id].ws=null;
-    const c=R.G.ch.find(x=>x.id===id);if(c)c.online=false;}
+    const c=R.G.ch.find(x=>x.id===id);
+    if(c){c.online=false;c.vx=0;c.vy=0;c.path=[];}}   /* 斷線的人不要一直走下去 */
+  /* 演練還沒開始就離線 → 位子完全釋放，讓別人可以選 */
+  if(id&&R.G.phase==='lobby'&&R.slots[id]&&!R.slots[id].ws){
+    R.slots[id]=null;delete R.setup.names[id];
+    const c=R.G.ch.find(x=>x.id===id);if(c)c.n=id.toUpperCase();}
   pushLobby();
 }
 function pushLobby(){const L=lobbyInfo();broadcast(()=>L);}
@@ -160,6 +165,17 @@ function onMsg(ws,m){
     ws.meta.role=m.role||'player';
     /* role 'lobby' = 手機已連上但還沒填名字，不佔位子 */
     if(ws.meta.role==='player'){
+      /* 同一支手機改名／換顏色時，先把它原本佔的位子整個清掉，
+         否則舊角色會一直掛在線上，最後六個位子全被同一個人佔滿 */
+      for(const k in R.slots){
+        if(R.slots[k]&&R.slots[k].ws===ws){
+          R.slots[k]=null;
+          const oc=R.G.ch.find(x=>x.id===k);
+          if(oc){oc.online=false;oc.n=k.toUpperCase();}
+          delete R.setup.names[k];
+        }
+      }
+      ws.meta.slot=null;
       const open=SIM.K.SLOTS.slice(0,R.setup.n).map(s=>s.id);
       let id=m.slot;
       if(!id||open.indexOf(id)<0||(R.slots[id]&&R.slots[id].ws&&R.slots[id].ws!==ws))
@@ -189,7 +205,17 @@ function onMsg(ws,m){
   if(ws.meta.role!=='teacher'&&ws.meta.role!=='host')return;
   if(m.t==='setup'){ if(R.G.phase!=='lobby')return;
     const s=Object.assign({},R.setup,m.setup||{});
-    newRound(s); pushLobby(); return;}
+    newRound(s);
+    /* 人數調小時，超出範圍的位子上如果還有人，把他退回進場畫面重選 */
+    const open=SIM.K.SLOTS.slice(0,R.setup.n).map(x=>x.id);
+    for(const k in R.slots){
+      if(R.slots[k]&&R.slots[k].ws&&open.indexOf(k)<0){
+        const w=R.slots[k].ws;R.slots[k]=null;delete R.setup.names[k];
+        w.meta.slot=null;
+        send(w,{t:'welcome',role:'player',slot:null,room:ROOM,serverTime:Date.now()});
+      }
+    }
+    pushLobby(); return;}
   if(m.t==='start'){ if(R.G.phase!=='lobby')return;
     doAct(null,'__start'); R.started=true; pushLobby(); return;}
   if(m.t==='pause'){ doAct(null,'__pause',{on:!!m.on}); pushLobby(); return;}
@@ -226,7 +252,7 @@ setInterval(()=>{
     });
   }
   /* 狀態快照 12Hz */
-  if(now-lastSnap>=83){
+  if(now-lastSnap>=66){
     lastSnap=now;
     broadcast(ws=>({t:'snap',s:SIM.snapshotFor(R.G,ws.meta.slot||null)}));
   }

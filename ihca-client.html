@@ -16,6 +16,8 @@ button{font-family:var(--sans);font-size:14px;color:var(--ink);background:#1F2C3
  border-radius:10px;padding:10px 8px;cursor:pointer;min-width:0;min-height:54px;font-weight:500;
  display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.3}
 button:active{background:#2C3D4C}
+button.sent{animation:sentPulse .45s ease-out}
+@keyframes sentPulse{0%{filter:brightness(1.75)}100%{filter:brightness(1)}}
 button:disabled{opacity:.28}
 button.hot{background:#8A2530;border-color:#C0454F;color:#fff}
 button.go{background:#1B5E45;border-color:#2E8A67}
@@ -222,6 +224,7 @@ body.mode-replay #rp{display:block}
 #rp .r2 button.on{border-color:var(--cy);background:#1D3543;color:#fff}
 
 body.mode-player #who{display:none}
+body.mode-host #hud{display:none}   /* 投影幕不顯示急救經過時間 —— 那是紀錄者的資訊 */
 body.mode-player #field{flex:0 0 auto;aspect-ratio:900/780;max-height:44vh}
 body.mode-player #toast{top:auto;bottom:8px}
 body.mode-player #panel{flex:1;height:auto;min-height:0}
@@ -321,12 +324,14 @@ const NET={ws:null,ok:false,queue:[],
   send(o){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(o));},
   act(a,p){if(SOLO||REPLAY){soloAct(a,p);return;}NET.send({t:'act',act:a,p:p||{}});},
   recv(m){
-    if(m.t==='welcome'){ME=m.slot;DENIED=null;
+    if(m.t==='welcome'){ME=m.slot;DENIED=null;PRED.init=0;PRED.vx=PRED.vy=0;_lastGate='';
       if(m.room){ROOM=m.room;localStorage.setItem('ihcaRoom',m.room);}
       if(m.key)TKEY=m.key;
       if(ME)localStorage.setItem('ihcaSlot',ME);}
     else if(m.t==='denied'){DENIED=m.need;ME=null;_lastGate='';paintGate();}
-    else if(m.t==='snap'){G=m.s;afterSnap();}
+    else if(m.t==='snap'){
+      if(G&&G.over&&!m.s.over){HIST=null;_askedHist=0;$('sheet').classList.remove('on');}
+      G=m.s;afterSnap();}
     else if(m.t==='lobby'){LOBBY=m;paintGate();paintTC();}
     else if(m.t==='log'){for(const e of m.e)toast(e.m,e.p);}
     else if(m.t==='history'){HIST=m.h;renderSheet();}
@@ -375,19 +380,39 @@ function smooth(c,dt){
   if(!s||Math.hypot(s.x-c.x,s.y-c.y)>260)s=_sm[c.id]={x:c.x,y:c.y};
   const k=Math.min(1,dt*16);s.x+=(c.x-s.x)*k;s.y+=(c.y-s.y)*k;return s;
 }
-let _rc=null,_rcN=0,_lastFrame=0;
+let _rc=null,_rcN=0,_lastFrame=0,ANIM=0;
+/* 自己的角色不等伺服器回話，先在本機動起來；收到快照再慢慢校正。
+   這是「延遲感」的主要來源 —— 少了它，每一步都要等一個來回。 */
+const PRED={init:0,x:0,y:0,vx:0,vy:0};
+function predict(c,dt){
+  if(!PRED.init){PRED.x=c.x;PRED.y=c.y;PRED.init=1;}
+  const spd=(!SOLO&&!REPLAY&&LOBBY&&LOBBY.speed)?LOBBY.speed:1;
+  if((PRED.vx||PRED.vy)&&!(G&&G.paused)){
+    PRED.x+=PRED.vx*200*dt*spd;PRED.y+=PRED.vy*200*dt*spd;
+    const p={x:PRED.x,y:PRED.y};IHCA.collide(p);PRED.x=p.x;PRED.y=p.y;
+    const ex=c.x-PRED.x,ey=c.y-PRED.y;
+    if(Math.hypot(ex,ey)>90){PRED.x=c.x;PRED.y=c.y;}
+    else{const k=Math.min(1,dt*1.8);PRED.x+=ex*k;PRED.y+=ey*k;}
+  }else{
+    const k=Math.min(1,dt*14);PRED.x+=(c.x-PRED.x)*k;PRED.y+=(c.y-PRED.y)*k;
+  }
+  return PRED;
+}
 function drawWard(cx,cv,meId){
   if(!G)return;
   const W=K.W,H=K.H;
   const now=performance.now(),fdt=Math.min(.06,(now-_lastFrame)/1000||.016);_lastFrame=now;
-  const CH=(SOLO||REPLAY)?G.ch:G.ch.map(c=>{const s=smooth(c,fdt);return Object.assign({},c,{x:s.x,y:s.y});});
+  const LIVE=G.ch.filter(c=>c.active!==false);
+  const CH=(SOLO||REPLAY)?LIVE:LIVE.map(c=>{
+    if(c.id===ME){const p=predict(c,fdt);return Object.assign({},c,{x:p.x,y:p.y});}
+    const s=smooth(c,fdt);return Object.assign({},c,{x:s.x,y:s.y});});
   if(!_rc||++_rcN>30){_rc=cv.getBoundingClientRect();_rcN=0;}
   const r=_rc,dpr=devicePixelRatio||1;
   if(cv.width!==Math.round(r.width*dpr)){cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);}
   cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,r.width,r.height);
   const sc=Math.min(r.width/W,r.height/H);
   cx.translate((r.width-W*sc)/2,(r.height-H*sc)/2);cx.scale(sc,sc);
-  const A=G.anim;
+  const A=(SOLO||REPLAY)?G.anim:ANIM;   /* 連線版用本機時鐘，動畫才會順 */
 
   const rr=(x,y,w,h,rad)=>{cx.beginPath();cx.moveTo(x+rad,y);cx.arcTo(x+w,y,x+w,y+h,rad);
     cx.arcTo(x+w,y+h,x,y+h,rad);cx.arcTo(x,y+h,x,y,rad);cx.arcTo(x,y,x+w,y,rad);cx.closePath();};
@@ -730,8 +755,10 @@ function buildPanel(){
   const L=[];
   const B=(tier,key,label,fn,cls,dis)=>L.push({tier,t:'btn',k:key,label,fn,cls:cls||'',dis:!!dis});
   const H=(tier,key,html,cls)=>L.push({tier,t:'html',k:key,html,cls:cls||'hint'});
-  const A=(a,p)=>()=>{NET.act(a,p);sub=null;paint();};
-  const SUB=s=>()=>{sub=s;paint();};
+  const A=(a,p)=>function(){buzz(8);this.classList.add('sent');
+    setTimeout(()=>{try{this.classList.remove('sent');}catch(e){}},450);
+    NET.act(a,p);sub=null;paint();};
+  const SUB=s=>()=>{buzz(6);sub=s;paint();};
 
   if(G.over){
     H(1,'over','急救結束，報表已顯示。','hint');
@@ -931,7 +958,7 @@ let _lastWho='';
 function paintWho(){
   if(MODE==='player'||MODE==='teacher'||REPLAY&&false)return;
   if(!G)return;
-  const h=G.ch.map(c=>{
+  const h=G.ch.filter(c=>c.active!==false).map(c=>{
     let b='空地',col=null;
     if(c.down>0){b='倒地 '+Math.ceil(c.down)+'s';col='#FF5566';}
     else if(G.cpr===c.id&&G.pauseVent){b='等通氣';col='#F5C542';}
@@ -1081,7 +1108,8 @@ function paintTC(){
      +'</div>'+warn
      +'<div style="margin-top:20px"><button class="go" style="width:100%;min-height:60px;font-size:17px" id="tcStart">開始演練</button></div>'
    ):(
-     '<h2>演練中</h2><div class="g3">'
+     '<h2>演練中　<span id="tcClock" style="font-family:var(--mono);color:#8FE3F5">--:--</span></h2>'
+     +'<div class="g3">'
      +'<button class="'+(LOBBY.paused?'warn':'')+'" id="tcPause">'+(LOBBY.paused?'▶ 繼續':'⏸ 暫停')+'</button>'
      +'<button id="tcSpeed">速度 '+LOBBY.speed+'×</button>'
      +'<button class="hot" id="tcStop">結束並看報表</button></div>'
@@ -1346,7 +1374,8 @@ $('spd').onclick=()=>{if(SOLO){speed=({1:2,2:3,3:1})[speed];$('spd').textContent
 $('pausebtn').onclick=()=>{if(SOLO&&LOCAL){soloCtl('__pause',{on:!LOCAL.paused});
   $('pausebtn').classList.toggle('on',LOCAL.paused);
   $('pausebtn').textContent=LOCAL.paused?'▶ 繼續':'⏸ 暫停';paint();}};
-$('ordb').onclick=()=>NET.act('ack');
+$('ordb').onclick=function(){buzz(10);this.classList.add('sent');
+  setTimeout(()=>{try{this.classList.remove('sent');}catch(e){}},450);NET.act('ack');};
 if(MODE==='player'||REPLAY){$('spd').style.display='none';$('pausebtn').style.display='none';}
 if(MODE==='host'||MODE==='teacher')$('stick').style.display='none';
 /* ═══ 浮動搖桿：按住病房畫面任何位置拖曳就能走；輕點＝走到那個站位 ═══ */
@@ -1365,10 +1394,11 @@ cv.addEventListener('pointerdown',e=>{
   ac();
   if(!meC())return;
   try{cv.setPointerCapture(e.pointerId);}catch(_){}
-  jId=e.pointerId;jSt={x:e.clientX,y:e.clientY};jMoved=false;jT0=performance.now();
+  jId=e.pointerId;jSt={x:e.clientX,y:e.clientY};jMoved=false;jT0=performance.now();_jt=0;
   showStick(e.clientX,e.clientY);
   e.preventDefault();
 },{passive:false});
+let _jlx=0,_jly=0;
 cv.addEventListener('pointermove',e=>{
   if(e.pointerId!==jId||!jSt)return;
   let dx=e.clientX-jSt.x,dy=e.clientY-jSt.y,d=Math.hypot(dx,dy);
@@ -1376,13 +1406,17 @@ cv.addEventListener('pointermove',e=>{
   if(d>JR){dx=dx/d*JR;dy=dy/d*JR;d=JR;}
   moveKnob(dx,dy);
   if(!jMoved)return;
-  const now=performance.now();if(now-_jt<80)return;_jt=now;
-  NET.act('move',{dx:dx/JR,dy:dy/JR});
+  const nx=dx/JR,ny=dy/JR;
+  PRED.vx=nx;PRED.vy=ny;                      /* 本機立刻動 */
+  const now=performance.now();
+  if(_jt===0||(Math.hypot(nx-_jlx,ny-_jly)>0.15&&now-_jt>70)){
+    _jt=now;_jlx=nx;_jly=ny;
+    NET.act('move',{dx:Math.round(nx*100)/100,dy:Math.round(ny*100)/100});}
   e.preventDefault();
 },{passive:false});
 function endStick(e){
   if(e.pointerId!==jId)return;
-  hideStick();
+  hideStick();PRED.vx=PRED.vy=0;_jlx=_jly=0;
   const quick=performance.now()-jT0<400;
   if(!jMoved&&quick){                       /* 輕點 = 走過去 */
     const w=toWorld(e);
@@ -1394,13 +1428,15 @@ function endStick(e){
     for(const k in G.eq){const q=G.eq[k];
       if(Math.abs(w.x-q.x)<q.w/2+40&&Math.abs(w.y-q.y)<q.h/2+46){
         const d2=Math.hypot(w.x-q.x,w.y-q.y);if(d2<bd){bd=d2;best={t:'e',k};}}}
+    PRED.vx=PRED.vy=0;
     if(best)NET.act('goto',{k:best.k});
     else NET.act('gotoXY',{x:w.x,y:w.y});
   }else NET.act('stop');
   jId=null;jSt=null;paint();
 }
 cv.addEventListener('pointerup',endStick);
-cv.addEventListener('pointercancel',e=>{hideStick();if(e.pointerId===jId){NET.act('stop');jId=null;jSt=null;}});
+cv.addEventListener('pointercancel',e=>{hideStick();PRED.vx=PRED.vy=0;
+  if(e.pointerId===jId){NET.act('stop');jId=null;jSt=null;}});
 
 /* 音效 */
 let AC=null;
@@ -1422,7 +1458,7 @@ const SFX={tick:()=>tone(1180,.035,'square',.05),t30:()=>tone(1520,.1,'square',.
  bcast:()=>{tone(600,.08,'sine',.09);setTimeout(()=>tone(900,.1,'sine',.09),80);setTimeout(()=>tone(1200,.12,'sine',.09),170);}};
 let W_={cnt:0,shocks:0,check:0,charged:false,down:0,air:'BVM',order:null,rosc:false,clues:0};
 function sfxWatch(){
-  if(!G||MODE==='teacher')return;
+  if(!G||MODE==='teacher'||REPLAY)return;
   if(G.cnt!==W_.cnt){if(G.cnt>W_.cnt)SFX.tick();W_.cnt=G.cnt;}
   if(G.needPause&&!W_.need)SFX.t30(); W_.need=G.needPause;
   if(G.shocks>W_.shocks){SFX.zap();W_.shocks=G.shocks;}
@@ -1477,6 +1513,8 @@ function loop(ts){
     let n=0;while(accSim>=IHCA.DT&&n<60){rpAdvance(1);accSim-=IHCA.DT;n++;}
   }
   if(G){
+    const meC0=meC();
+    if(meC0&&(meC0.busy||meC0.down>0))PRED.vx=PRED.vy=0;
     pushMon(dt0*(SOLO?speed:(REPLAY&&RP.playing?RP.speed:1)));
     pushStrip(dt0);
     sfxWatch();
@@ -1490,7 +1528,11 @@ function loop(ts){
       ? (G.check>0?('第 '+G.round+' 次心律檢查中'):('距上次檢查 '+mmt(G.sinceCheck)))
       : ((meNow?meNow.n:'你')+' 看不到急救時間 — 要到電腦車前面');
   }
+  if(G&&!G.paused&&!G.over&&G.phase!=='lobby')ANIM+=dt0;
   if(toastT>0){toastT-=dt0;if(toastT<=0)$('toast').classList.remove('on');}
+  if(MODE==='teacher'&&G){const el=$('tcClock');
+    if(el){const txt=mmt(G.t)+(G.check>0?'　心律檢查中':'')+(G.paused?'　⏸ 已暫停':'');
+      if(el.textContent!==txt)el.textContent=txt;}}
   acc+=dt0;if(acc>.1){acc=0;paint();if(REPLAY)paintReplayBar();}
   requestAnimationFrame(loop);
 }

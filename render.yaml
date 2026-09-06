@@ -3,10 +3,10 @@ services:
     name: ihca
     runtime: node
     plan: free
-    buildCommand: ""
-    startCommand: node server.js
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: ROOM
-        value: "2468"        # 固定房間代碼，想換就在 Render 後台改
+        value: "2468"        # 固定房間代碼，之後可在 Render 後台改
       - key: TKEY
-        generateValue: true  # 教師金鑰，Render 會自動產生一組
+        value: "emed2026"    # 教師金鑰，請改成你自己的
