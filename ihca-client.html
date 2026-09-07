@@ -140,6 +140,19 @@ body.mode-host #who .w .b{font-size:14px}
  padding:7px 10px;font-size:13px;color:#A8BECE}
 .held b{color:#EAF2F8}
 .hint{color:var(--dim);font-size:12.5px;padding:3px 2px;line-height:1.5;grid-column:1 / -1}
+/* 通氣節拍（A8：插管後不再自動給氣，床頭要看得到節奏） */
+.metro{position:relative;height:26px;border-radius:7px;background:rgba(255,255,255,.07);
+  overflow:hidden;margin:2px 0 4px}
+.metro i{position:absolute;left:0;top:0;bottom:0;background:rgba(76,175,110,.42);
+  transition:width .12s linear}
+.metro.due i{background:rgba(224,85,85,.55)}
+.metro b{position:relative;display:block;line-height:26px;text-align:center;
+  font-size:12.5px;color:#fff;letter-spacing:.4px}
+.metro.due b{animation:mblink .7s steps(2,end) infinite}
+@keyframes mblink{50%{opacity:.35}}
+/* 下 order 指定對象用的頭像色塊 */
+.who .dot{display:inline-block;width:13px;height:13px;border-radius:50%;
+  margin-right:7px;vertical-align:-2px;box-shadow:0 0 0 2px rgba(0,0,0,.28)}
 .bad{color:#FF8A93}.good{color:#6FE0A6}
 .cnt{grid-column:1 / -1;display:flex;align-items:center;gap:8px;margin-bottom:2px}
 .cnt b{font-family:var(--mono);font-size:30px;line-height:1;color:#FFF}
@@ -199,6 +212,14 @@ body.mode-host #who .w .b{font-size:14px}
 .row span:first-child{color:var(--dim)}
 .row span:last-child{font-family:var(--mono);color:#EAF2F8;text-align:right;white-space:pre-line}
 .row.ok span:last-child{color:#6FE0A6}
+.row.warn span:last-child{color:#E8B84A}
+table.drill{border-collapse:collapse;width:100%;font-size:12.5px;margin:6px 0}
+table.drill th,table.drill td{border:1px solid rgba(255,255,255,.10);padding:5px 6px;text-align:center}
+table.drill th{color:var(--dim);font-weight:500;font-size:11.5px;line-height:1.3}
+table.drill td:first-child,table.drill th:first-child{text-align:left;white-space:nowrap}
+table.drill td{color:#4A5560}
+table.drill td.done{color:#6FE0A6;font-weight:700}
+table.drill .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
 .row.no span:last-child{color:#FF8A93}
 .tlr{display:flex;gap:9px;font-size:12.5px;line-height:1.55;padding:2.5px 0;color:#B9C9D6}
 .tlr .tt{font-family:var(--mono);color:#5F7183;flex:none;width:44px}
@@ -294,6 +315,8 @@ let ME=null;
 let G=null;                      /* 要畫的狀態 */
 let LOBBY=null;
 let sub=null, mode='tap', speed=1, toastT=0, jact=false;
+let orderTxt='';
+const _confirm={};
 let ettScope='Direct', ettBlade='3 號';
 let SOLO=(MODE==='solo'), REPLAY=(MODE==='replay');
 let ROOM=QS.get('r')||localStorage.getItem('ihcaRoom')||'';
@@ -586,8 +609,7 @@ function drawWard(cx,cv,meId){
     cx.restore();
     if(!c.online&&!SOLO&&!REPLAY)plate(c.x,y-66,'未上線','rgba(90,100,110,.9)','#CBD6DE',11);
     if(G.leader===c.id)plate(c.x,y-126,'Leader','rgba(160,124,20,.96)','#fff',11);
-    if(down)plate(c.x,c.y-46,(c.downWhy==='tired'?'我沒力了 ':'被電到 ')+Math.ceil(c.down)+'s',
-      c.downWhy==='tired'?'rgba(190,120,30,.96)':'rgba(200,60,60,.96)','#fff',12);
+    if(down)plate(c.x,c.y-46,'被電到 '+Math.ceil(c.down)+'s','rgba(200,60,60,.96)','#fff',12);
     const bub=c.bubble&&c.bubble.lines?c.bubble.lines[c.bubble.i]:null;
     if(bub&&!down){cx.font='600 13px sans-serif';cx.textAlign='center';
       const bw=cx.measureText(bub).width+22;
@@ -753,12 +775,20 @@ function paintYouAre(){
 function buildPanel(){
   const c=meC();if(!c){setActs([{t:'html',k:'w',cls:'hint',html:'等待連線…'}]);return;}
   const L=[];
-  const B=(tier,key,label,fn,cls,dis)=>L.push({tier,t:'btn',k:key,label,fn,cls:cls||'',dis:!!dis});
-  const H=(tier,key,html,cls)=>L.push({tier,t:'html',k:key,html,cls:cls||'hint'});
+  /* pri 只在 tier ① 生效，數字小的排前面：
+     1 判讀宣告 → 2 手上有東西就用掉 → 3 壓胸 → 4 摸脈搏/NIBP → 5 診斷 */
+  const B=(tier,key,label,fn,cls,dis,pri)=>L.push({tier,t:'btn',k:key,label,fn,
+    cls:cls||'',dis:!!dis,pri:pri||9});
+  const H=(tier,key,html,cls,pri)=>L.push({tier,t:'html',k:key,html,cls:cls||'hint',pri:pri||9});
   const A=(a,p)=>function(){buzz(8);this.classList.add('sent');
     setTimeout(()=>{try{this.classList.remove('sent');}catch(e){}},450);
     NET.act(a,p);sub=null;paint();};
   const SUB=s=>()=>{buzz(6);sub=s;paint();};
+  /* 只有不可逆、誤按代價高的動作才走二次確認 */
+  const confirmOnce=(key,label,fn)=>function(){
+    if(_confirm[key]&&Date.now()-_confirm[key]<4000){delete _confirm[key];return fn.call(this);}
+    _confirm[key]=Date.now();buzz([12,50,12]);
+    this.textContent='再按一次確認：'+label;this.classList.add('warn');};
 
   if(G.over){
     H(1,'over','急救結束，報表已顯示。','hint');
@@ -766,15 +796,22 @@ function buildPanel(){
     setActs(strip3(L));return;}
   if(G.paused){setActs([{t:'html',k:'p',cls:'hint',html:'⏸ 已暫停（教師模式）。這是討論用的停格。'}]);return;}
   if(c.down>0){setActs([{t:'html',k:'d',cls:'hint bad',
-    html:c.n+(c.downWhy==='tired'?' 力氣用完倒下了，':' 被電到了，')+Math.ceil(c.down)+' 秒後才爬得起來。'}]);return;}
-  if(c.busy){setActs([{t:'html',k:'b',cls:'hint',
-      html:c.busy.l+'… '+Math.ceil(c.busy.r)+' 秒'+(c.slow?'<br><span class="bad">家屬就在旁邊，動作變慢了。</span>':'')},
-    {t:'btn',k:'cancel',label:'中斷',cls:'ghost wide',fn:A('cancel')}]);return;}
+    html:c.n+' 被電到了，'+Math.ceil(c.down)+' 秒後才爬得起來。'}]);return;}
+  /* busy 期間鎖住①處置與③準備，但溝通不該被鎖 —
+     臨床上一邊上針一邊講話是常態，而且封住嘴會讓「做事的人」的溝通指標系統性偏低。 */
+  const BUSY=!!c.busy;
+  if(BUSY){
+    H(1,'b',c.busy.l+'… '+Math.ceil(c.busy.r)+' 秒'
+      +(c.slow?'<br><span class="bad">家屬就在旁邊，動作變慢了。</span>':'')
+      +'<br><span style="color:var(--dim)">手上在忙，但你還是可以講話。</span>',null,0);
+    B(1,'cancel','中斷手上的事',A('cancel'),'ghost wide',false,1);
+  }
 
   const hk=c.hold?K.ITEM[c.hold].k:null, k=nearSt(c), eq=nearEq(c), atS=(k==='bedL'||k==='bedR');
   const lead=G.leader===c.id;
 
   /* ── 子選單 ── */
+  if(BUSY&&sub&&['ready','order','orderTo','concern','clue'].indexOf(sub)<0)sub=null;
   if(sub){
     if(sub==='drug'){H(3,'l','抽藥（在急救車旁）');
       for(const m of K.DRUGS) m==='amio'?B(3,'am',K.ITEM[m].n+' ▸',SUB('amio'))
@@ -799,15 +836,24 @@ function buildPanel(){
       for(const x of K.TUBES)B(3,'t'+x,x+' 號',A('grab',{k:'ett',scope:ettScope,blade:ettBlade,tube:x}),'go');
       B(3,'bk','← 返回',SUB('ett2'),'ghost wide');setActs(strip3(L));return;}
     if(sub==='j'){for(const j of K.JOULES)B(3,'j'+j,j+' J',A('setJ',{j}),G.df.j===j?'go':'');
-      H(3,'l','焦耳數會影響轉律機率：200J 最高，50J 明顯偏低。');
       B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
     if(sub==='clue'){const vis=G.clues.filter(q=>q.txt!==null);
       H(2,'l',c.n+' 知道的事：');
       if(!vis.length)H(2,'n','目前什麼都不知道。');
       vis.forEach((q,i)=>H(2,'c'+i,'<b>'+K.SRC[q.src]+' · '+mmt(q.t)+(q.cast?' · 已公開':' · 尚未公開')+'</b>'+q.txt,'cl'));
       B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
-    if(sub==='order'){H(2,'l','下 order 後會顯示在畫面最上方，別人按「收到」才算複誦。');
-      for(const t of K.ORDERS)B(2,'o'+t,t,A('order',{txt:t}),'talk');
+    if(sub==='order'){H(2,'l','1/2　下什麼 order');
+      for(const t of K.ORDERS)B(2,'o'+t,t,()=>{buzz(6);orderTxt=t;sub='orderTo';paint();},'talk');
+      B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='orderTo'){H(2,'l','2/2　交給誰　<b>'+orderTxt+'</b>');
+      for(const o of G.ch){ if(o.id===c.id||o.active===false)continue;
+        B(2,'ot'+o.id,'<span class="dot" style="background:'+o.c+'"></span>'+o.n
+          +(o.busy?'（'+o.busy.l+'）':o.id===G.cpr?'（壓胸中）':''),
+          A('order',{txt:orderTxt,to:o.id}),'talk who');}
+      B(2,'otn','不指定 — 對全隊說',A('order',{txt:orderTxt}),'go wide');
+      B(2,'bk','← 返回',SUB('order'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='concern'){H(2,'l','提出疑慮 — 三個強度，由輕到重。這在報表上會單獨列出。');
+      K.CONCERN.forEach((t,i)=>B(2,'cc'+i,'⚠ '+t,A('concern',{txt:t}),i===2?'hot wide':'warn wide'));
       B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
     if(sub==='ready'){
       (c.recent||[]).forEach((t,i)=>B(2,'r'+i,'📢 '+t,A('ready',{txt:t}),'go wide'));
@@ -815,88 +861,115 @@ function buildPanel(){
       B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
   }
 
+  if(!BUSY){
   /* ── ① 現在能做的處置 ── */
+  /* A1：這些處置都會讓壓胸者停手，標籤要先講清楚，但不加二次確認 —
+     多一次點擊會污染所有延遲指標，而且「不小心中斷壓胸」本來就是要抓出來討論的。 */
+  const CPRW=(G.cpr===c.id)?'（會中斷壓胸）':'';
+  /* 摸到脈搏是全場最急的一句話，不能藏在「回報 ▸」子選單裡 */
+  if(G.roscFelt&&!G.roscKnown&&(c.recent||[]).includes('我摸到脈搏了！'))
+    B(1,'rosc','📢 我摸到脈搏了！— 快喊出來讓大家停手',A('ready',{txt:'我摸到脈搏了！'}),'hot wide',false,0);
   if(G.check>0){
-    H(1,'chk','心律檢查中 — 全部停手。停頓每多一秒，灌流就掉一分。');
+    H(1,'chk','心律檢查中 — 全部停手。停頓每多一秒，灌流就掉一分。',null,1);
     if(lead&&k==='foot'){
-      B(1,'cs','宣告：可電擊',A('callRhythm',{v:'shock'}),'hot');
-      B(1,'cn','宣告：不可電擊',A('callRhythm',{v:'noshock'}),'go');}
-    else if(lead)H(1,'cl','Leader 要站到床尾才能做判讀宣告。');
+      B(1,'cs','宣告：可電擊',A('callRhythm',{v:'shock'}),'hot',false,1);
+      B(1,'cn','宣告：不可電擊',A('callRhythm',{v:'noshock'}),'go',false,1);}
+    else if(lead)H(1,'cl','Leader 要站到床尾才能做判讀宣告。',null,1);
     else H(1,'cw','等 Leader'+(G.leader?'（'+C(G.leader).n+'）':'')+'宣告判讀。');
   }
   if(G.cpr===c.id){const f=Math.round(c.fat*100);
     H(1,'fat','<b>'+G.cnt+'</b><span style="color:var(--dim);font-size:12px">下</span>'
       +'<div class="fat"><i style="width:'+f+'%;background:'+(f>70?'#E05555':f>40?'#E8A33D':'#4CAF6E')+'"></i></div>'
       +'<span style="color:var(--dim);font-size:12px">疲勞 '+f+'%</span>','cnt');
-    if(G.needPause&&!G.pauseVent&&!G.holdCpr)B(1,'cp','數到 30 · 停手讓通氣',A('callPause'),'warn wide');
+    if(G.needPause&&!G.pauseVent&&!G.holdCpr)B(1,'cp','數到 30 · 停手讓通氣',A('callPause'),'warn wide',false,3);
     if(G.pauseVent){H(1,'pv','等床頭壓甦醒球（'+G.breaths+'/2）已等 '+Math.round(G.noVentT)+' 秒');
-      if(G.noVentT>12)B(1,'sv','放棄這輪通氣',A('skipVent'),'ghost');}
-    if(G.holdCpr)B(1,'rc','繼續壓胸',A('resumeCpr'),'go wide');}
+      if(G.noVentT>12)B(1,'sv','放棄這輪通氣',A('skipVent'),'ghost',false,3);}
+    if(G.holdCpr)B(1,'rc','繼續壓胸',A('resumeCpr'),'go wide',false,3);}
   if(atS){
     if(G.check<=0){
       if(hk==='paddle')H(1,'np','手上拿著電擊板，沒辦法壓胸。');
-      else if(G.cpr!==c.id)B(1,'cpr',G.cpr?'接手壓胸':'開始壓胸',A('cprStart'),'go wide');
-      else B(1,'cpr0','停止壓胸',A('cprStop'),'hot');}
-    B(1,'pulse','摸脈搏 5s',A('checkPulse'));
-    B(1,'nibp',G.nibp.r>0?'NIBP 量測中 '+Math.ceil(G.nibp.r)+'s':'量 NIBP 30s',A('nibp'),'',G.nibp.r>0);
+      else if(G.cpr!==c.id)B(1,'cpr',G.cpr?'接手壓胸':'開始壓胸',A('cprStart'),'go wide',false,3);
+      else B(1,'cpr0','停止壓胸',A('cprStop'),'hot',false,3);}
+    B(1,'pulse','摸脈搏 5s'+(G.cpr===c.id?'（會中斷壓胸）':''),A('checkPulse'),
+      G.cpr===c.id?'warn':'',false,4);
+    B(1,'nibp',G.nibp.r>0?'NIBP 量測中 '+Math.ceil(G.nibp.r)+'s':'量 NIBP 30s',A('nibp'),'',G.nibp.r>0,4);
   }
   if(k==='head'){
-    B(1,'bag',G.pauseVent?'壓甦醒球 ('+G.breaths+'/2)':'壓甦醒球',A('bag'),G.pauseVent?'go wide':'');
+    B(1,'bag',G.pauseVent?'壓甦醒球 ('+G.breaths+'/2)':'壓甦醒球',A('bag'),
+      G.pauseVent?'go wide':(G.air==='ETT'?'go wide':''),false,3);
     const h=G.ch.find(o=>o.id!==c.id&&o.active!==false&&o.hold==='ett'&&Math.hypot(o.x-c.x,o.y-c.y)<165);
     if(G.air==='bad'){H(1,'nb','EtCO₂ 沒有波形，管子位置不對。','hint bad');
       if(c.hold)H(1,'hb','手上有東西就不能插管，先放下。');
-      else if(h)B(1,'re','拔管重插 15s — '+h.n+' 遞給你',A('reett'),'hot wide');
+      else if(h)B(1,'re','拔管重插 15s — '+h.n+' 遞給你',A('reett'),'hot wide',false,2);
       else H(1,'nh','重插一樣要有人再備一套器材送過來。');}
     else if(G.air==='BVM'){
       if(c.hold)H(1,'hb','手上有東西就不能插管，先放下。');
-      else if(h)B(1,'et','執行插管 15s（'+K.SCOPEN[h.ettSpec.scope]+'）— '+h.n+' 遞給你',A('ett'),'go wide');
+      else if(h)B(1,'et','執行插管 15s（'+K.SCOPEN[h.ettSpec.scope]+'）— '+h.n+' 遞給你',A('ett'),'go wide',false,2);
       else H(1,'nh','要插管的話，需要有人去急救車拿插管器材，走到你旁邊。');}
-    else H(1,'ok','已插管，每 6 秒自動給一次，也可以手動壓。');}
+    else{
+      /* A8：插管後沒有人擠就是真的沒有通氣。做成視覺節拍，抬頭就知道該不該壓。 */
+      const vt=G.ventT||0, due=vt>=6, phase=Math.min(1,vt/6);
+      H(1,'mt','<div class="metro'+(due?' due':'')+'">'
+        +'<i style="width:'+Math.round(phase*100)+'%"></i>'
+        +'<b>'+(due?'該給氣了':'下一次通氣 '+Math.max(0,(6-vt)).toFixed(0)+' 秒')+'</b></div>'
+        +'<span style="color:var(--dim);font-size:12px">已插管 — 每 6 秒擠一次，不要跟著壓胸停。</span>',
+        'hint'+(due?' bad':''),3);}}
   if(c.hold){
-    if(hk==='leads'&&atS)B(1,'al','貼上 EKG lead 5s',A('attachLeads'),'go wide');
-    if(hk==='cath'&&atS)B(1,'iv','上針 10s',A('iv'),'go wide');
-    if(hk==='io'&&atS)B(1,'io','打骨內針 IO 12s',A('ioAccess'),'go wide');
-    if(hk==='needle'&&atS)B(1,'nd','針刺減壓 12s',A('needle'),'go wide');
-    if(hk==='drug'&&atS)B(1,'gv','推 '+K.ITEM[c.hold].n+(c.dose?' '+c.dose+'mg':''),A('give'),'go wide',!G.ivFixed);
-    if(hk==='drug'&&atS&&!G.ivFixed)H(1,'ni','還沒有可以用的血管通路。','hint bad');
+    if(hk==='leads'&&atS)B(1,'al','貼上'+K.ITEM.leads.n+' 5s'+CPRW,A('attachLeads'),'go wide',false,2);
+    if(hk==='cath'&&atS)B(1,'iv','上針 10s'+CPRW,A('iv'),'go wide',false,2);
+    if(hk==='io'&&atS)B(1,'io','打骨內針 IO 12s'+CPRW,A('ioAccess'),'go wide',false,2);
+    if(hk==='needle'&&atS)B(1,'nd','針刺減壓 12s'+CPRW,A('needle'),'go wide',false,2);
+    if(hk==='drug'&&atS)B(1,'gv','推 '+K.ITEM[c.hold].n+(c.dose?' '+c.dose+'mg':'')+CPRW,
+      A('give'),'go wide',!G.ivFixed,2);
+    if(hk==='drug'&&atS&&!G.ivFixed)H(1,'ni','還沒有可以用的血管通路。','hint bad',2);
     if(hk==='paddle'){
       B(1,'clr',clearOnG()?'已喊 CLEAR（'+Math.ceil(10-(G.t-G.clearAt))+'s）':'📢 喊 CLEAR — 大家手離開',
-        A('clear'),clearOnG()?'ghost wide':'warn wide',clearOnG());
+        A('clear'),clearOnG()?'ghost wide':'warn wide',clearOnG(),2);
       const e=G.eq.defib,okc=Math.hypot(c.x-e.x,c.y-e.y)<=e.cable;
       if(!atS)H(1,'ps','拿著電擊板，要站到<b>床左或床右</b>才能放電。');
       else if(!okc)H(1,'pc2','線不夠長 — 要有人把電擊器推近一點。','hint bad');
-      else if(!G.df.charged&&G.df.chargeT<=0)B(1,'ch','充電 '+G.df.j+'J · 3s',A('charge'),'warn');
+      else if(!G.df.charged&&G.df.chargeT<=0)B(1,'ch','充電 '+G.df.j+'J · 3s',A('charge'),'warn',false,2);
       else if(G.df.chargeT>0)H(1,'cg','充電中… '+Math.ceil(G.df.chargeT)+' 秒');
-      else B(1,'sh','放 電 '+G.df.j+'J'+(G.df.sync?'（同步）':''),A('shock'),'hot wide');
-      if(!G.df.charged&&G.df.chargeT<=0&&okc&&!atS)B(1,'ch2','充電 '+G.df.j+'J · 3s',A('charge'),'warn');}
+      else B(1,'sh','放 電 '+G.df.j+'J'+(G.df.sync?'（同步）':'')
+        +(clearOnG()?'':' — 尚未喊 CLEAR'),A('shock'),clearOnG()?'hot wide':'warn wide',false,2);
+      if(!G.df.charged&&G.df.chargeT<=0&&okc&&!atS)B(1,'ch2','充電 '+G.df.j+'J · 3s',A('charge'),'warn',false,2);}
     if(hk==='probe'){const e=G.eq.echo,okc=Math.hypot(c.x-e.x,c.y-e.y)<=e.cable;
       if(!['head','bedL','bedR'].includes(k))H(1,'pb','拿著探頭，要站到床邊才能掃。');
       else if(!okc)H(1,'pb2','線不夠長 — 超音波主機離太遠。','hint bad');
-      else B(1,'sc','執行超音波掃描 15s',A('scan'),'go wide');}
+      else B(1,'sc','執行超音波掃描 15s'+CPRW,A('scan'),'go wide',false,2);}
     if(hk==='ett'){
       const hd=G.ch.find(o=>o.id!==c.id&&o.active!==false&&nearSt(o)==='head');
       H(1,'eh',hd?'走到 '+hd.n+' 旁邊，他才會出現插管選項。':'把器材帶到床頭旁邊。');}
   }
-  if(eq==='pc')B(1,'cht','查病歷 12s',A('chart'),'go');
+  if(eq==='pc')B(1,'cht','查病歷 12s',A('chart'),'go',false,5);
   const canAsk=G.family.gone?(k==='door'):(Math.hypot(c.x-G.family.x,c.y-G.family.y)<140);
-  if(canAsk)B(1,'ask','問家屬與護理師 10s',A('ask'),'go');
-  if(lead&&k==='foot'&&G.check<=0&&G.phase!=='post')B(1,'rk','停下來檢查心律 15s',A('rhythmCheck'),'warn wide');
+  if(canAsk)B(1,'ask','問家屬與護理師 10s',A('ask'),'go',false,5);
+  if(lead&&k==='foot'&&G.check<=0&&G.phase!=='post')
+    B(1,'rk','停下來檢查心律（上限 '+K.CHECKMAX+' 秒）',A('rhythmCheck'),'warn wide',false,3);
   if(G.phase==='post'){
     H(1,'po','已確認 ROSC。停止壓胸、量血壓、確認氣道，然後由 Leader 宣告結束交班。','hint good');
-    if(lead&&k==='foot')B(1,'end','宣告急救結束、交班',A('endCase'),'lead wide');}
+    if(lead&&k==='foot')B(1,'end','宣告急救結束、交班',confirmOnce('end','宣告急救結束、交班',A('endCase')),'lead wide',false,3);}
 
-  /* ── ② 溝通 ── */
-  B(2,'rdy','📢 回報 ▸',SUB('ready'),'talk wide');
+  }
+  /* ── ② 溝通 ──
+     這一層在 busy 期間仍然開放，而且與論文指標有關的按鈕（複誦、回報完成、
+     喊出線索）固定在最上面、一次點擊，避免把「找按鈕的時間」量進延遲指標。 */
+  if(G.order&&G.order.by!==c.id&&!G.order.ack.includes(c.id)){
+    const mine=(!G.order.to||G.order.to===c.id);
+    B(2,'ack',(mine?'✓ 複誦：':'✓ 代為回應：')+G.order.txt,A('ack'),mine?'go wide':'talk wide');}
+  if(G.order&&!G.order.done&&(G.order.ack.includes(c.id)||G.order.to===c.id))
+    B(2,'dn','✔ 回報完成：'+G.order.txt,A('doneReport'),'go wide');
   G.clues.filter(q=>q.txt!==null&&!q.cast)
     .forEach(q=>B(2,'ct'+q.src,'📢 大聲喊出：'+K.SRC[q.src],A('cast',{src:q.src}),'go wide'));
+  B(2,'rdy','📢 回報 ▸',SUB('ready'),'talk wide');
+  B(2,'cn','⚠ 提出疑慮 ▸',SUB('concern'),'warn wide');
   if(k==='foot'){
     if(!lead)B(2,'ld',G.leader?'接手 Leader（向 '+C(G.leader).n+' 交接）':'★ 宣告：我是 Leader',
       A('claimLead'),'lead wide');
     else B(2,'or','下 Order ▸',SUB('order'),'talk wide');}
   if(eq==='pc')B(2,'tc','📢 報時給全隊',A('timeCall'),'talk');
-  if(G.order&&G.order.by!==c.id&&!G.order.ack.includes(c.id))
-    B(2,'ack','✓ 複誦：'+G.order.txt,A('ack'),'go wide');
 
+  if(!BUSY){
   /* ── ③ 準備與雜項 ── */
   if(c.hold)H(3,'held','手上：'+K.ITEM[c.hold].s+' <b>'+K.ITEM[c.hold].n
     +(c.dose?' '+c.dose+'mg':'')
@@ -924,14 +997,18 @@ function buildPanel(){
   if(G.family&&!G.family.gone&&Math.hypot(c.x-G.family.x,c.y-G.family.y)<140)
     B(3,'esc','帶家屬到門外 8s',A('escort'),'wide');
   B(3,'clu','線索',SUB('clue'),'ghost');
+  }
   setActs(strip3(L));
 }
 /* 依 tier 排序並插入分隔標題 */
 function strip3(L){
   const out=[];const names={1:'① 現在能做的處置',2:'② 溝通',3:'③ 準備與雜項'};
   for(const t of [1,2,3]){
-    const g=L.filter(x=>x.tier===t);
+    let g=L.filter(x=>x.tier===t);
     if(!g.length)continue;
+    /* tier ① 依臨床優先序重排，不照程式碼的執行順序 */
+    if(t===1)g=g.map((x,i)=>[x,i]).sort((a,b)=>((a[0].pri||9)-(b[0].pri||9))||(a[1]-b[1]))
+                .map(x=>x[0]);
     out.push({t:'html',k:'sec'+t,cls:'sec t'+t,html:names[t]+'<i></i>'});
     for(const x of g)out.push(x);}
   return out;
@@ -1106,7 +1183,33 @@ function paintTC(){
      +K.CAUSES.map(c=>'<button class="'+(st.cause===c.id?'on':'')+'" data-k="cause" data-v="'+c.id+'">'
        +c.n+'<small style="opacity:.6;font-size:11px">建議：'+c.typical.map(r=>RH(r).short).join('/')+'</small></button>').join('')
      +'</div>'+warn
-     +'<div style="margin-top:20px"><button class="go" style="width:100%;min-height:60px;font-size:17px" id="tcStart">開始演練</button></div>'
+     +'<div style="margin-top:20px">'
+     +'<button class="warn" style="width:100%;min-height:52px;font-size:16px;margin-bottom:8px" id="tcTrain">'
+       +'先進熟悉環境（練習假人）</button>'
+     +(st.lastDrill?'<div class="hint" style="margin:-2px 0 8px">上一次熟悉環境：'
+       +(st.lastDrill.done!==null?'全員完成，用了 '+st.lastDrill.done+' 秒'
+                                 :'未全員完成（共 '+st.lastDrill.dur+' 秒）')+'</div>':'')
+     +'<button class="go" style="width:100%;min-height:60px;font-size:17px" id="tcStart">開始演練</button></div>'
+   ):LOBBY.training?(
+     /* 熟悉環境：教師看到的是每個人的核心互動檢核表，不是演練控制 */
+     '<h2>熟悉環境　<span id="tcClock" style="font-family:var(--mono);color:#8FE3F5">--:--</span></h2>'
+     +'<p class="note">練習假人不會惡化、不會 ROSC、沒有時限，也不會錄影。'
+       +'讓每個人把七項核心互動各做過一次，再開始教案。</p>'
+     +'<div style="overflow-x:auto"><table class="drill"><tr><th>學員</th>'
+       +K.DRILL.map(d=>'<th>'+d.n+'</th>').join('')+'</tr>'
+       +(LOBBY.slots||[]).filter(x=>x.name).map(function(x){
+          const d=(LOBBY.drill||{})[x.id]||{};
+          return '<tr><td><span class="dot" style="background:'+x.c+'"></span>'+x.name+'</td>'
+            +K.DRILL.map(k=>'<td class="'+(d[k.k]!==undefined?'done':'')+'">'
+              +(d[k.k]!==undefined?'✔':'·')+'</td>').join('')+'</tr>';}).join('')
+       +'</table></div>'
+     +'<p class="note">'+(LOBBY.drillDone!==null&&LOBBY.drillDone!==undefined
+        ?'<b style="color:#6FE0A6">全員完成，用了 '+LOBBY.drillDone+' 秒。</b>'
+        :'還沒有全員完成。')+'</p>'
+     +'<div class="g3">'
+     +'<button class="'+(LOBBY.paused?'warn':'')+'" id="tcPause">'+(LOBBY.paused?'▶ 繼續':'⏸ 暫停')+'</button>'
+     +'<button id="tcSpeed">速度 '+LOBBY.speed+'×</button>'
+     +'<button class="go" id="tcTrainEnd">結束熟悉、回到教案設定</button></div>'
    ):(
      '<h2>演練中　<span id="tcClock" style="font-family:var(--mono);color:#8FE3F5">--:--</span></h2>'
      +'<div class="g3">'
@@ -1135,6 +1238,8 @@ function paintTC(){
       NET.send({t:'setup',setup:Object.assign({},st,s)});});
     const on=(id,fn)=>{const el=$(id);if(el)el.onclick=fn;};
     on('tcStart',()=>NET.send({t:'start'}));
+    on('tcTrain',()=>NET.send({t:'trainStart'}));
+    on('tcTrainEnd',()=>{if(confirm('結束熟悉環境，回到教案設定？'))NET.send({t:'trainEnd'});});
     on('tcPause',()=>NET.send({t:'pause',on:!LOBBY.paused}));
     on('tcSpeed',()=>NET.send({t:'speed',v:LOBBY.speed>=3?1:LOBBY.speed+1}));
     on('tcStop',()=>{if(confirm('結束這一局？'))NET.send({t:'stop'});});
@@ -1276,6 +1381,18 @@ function renderSheet(){
 /* ═══════════ 重播 ═══════════ */
 const RP={rec:null,G:null,qi:0,end:0,playing:false,speed:2,eye:'a',ready:false};
 function rpLoad(rec){
+  /* 引擎版本檢查：重播是「同樣的種子＋同樣的操作序列重算一次」，
+     只要模擬邏輯改過，舊檔重播出來就是另一局。寧可拒播，也不要靜默播錯。 */
+  const need=IHCA.ENGINE, got=rec.engine||null;
+  if(got!==need){
+    const msg=got
+      ? '這個錄影檔是引擎 '+got+' 產生的，本版是 '+need+'。\n'
+        +'模擬邏輯改過之後重播會算出不一樣的一局，所以不能播。'
+      : '這個錄影檔沒有引擎版本標記（v3.2 以前），本版是 '+need+'。\n'
+        +'舊檔只能當歷史文件，不能重播，也不要與新資料合併分析。';
+    alert(msg);
+    return false;
+  }
   RP.rec=rec;RP.eye='a';
   /* 先整場跑一次，找出結束的 tick */
   const probe=IHCA.newState(rec.seed,rec.setup);
@@ -1291,7 +1408,9 @@ function rpLoad(rec){
   rpReset();RP.ready=true;
   $('rpSeek').max=RP.end;
   paintReplayBar();
+  return true;
 }
+
 function rpReset(){
   RP.G=IHCA.newState(RP.rec.seed,RP.rec.setup);RP.qi=0;G=RP.G;
   for(const id in MON){MON[id].buf.fill(0);}
@@ -1353,7 +1472,7 @@ function replayGate(){
   $('rpFile').onchange=ev=>{
     const f=ev.target.files[0];if(!f)return;
     const rd=new FileReader();
-    rd.onload=()=>{try{rpLoad(JSON.parse(rd.result));e.classList.remove('on');}
+    rd.onload=()=>{try{if(rpLoad(JSON.parse(rd.result))!==false)e.classList.remove('on');}
       catch(err){alert('這個檔案讀不出來：'+err.message);}};
     rd.readAsText(f);};
   if(!isFile)fetch('/recordings').then(r=>r.json()).then(list=>{
@@ -1362,7 +1481,8 @@ function replayGate(){
     box.innerHTML='';
     for(const f of list){const b=document.createElement('button');
       b.textContent=f;b.style.minHeight='44px';
-      b.onclick=()=>fetch('/recordings/'+f).then(r=>r.json()).then(rec=>{rpLoad(rec);e.classList.remove('on');});
+      b.onclick=()=>fetch('/recordings/'+f).then(r=>r.json()).then(rec=>{
+        if(rpLoad(rec)!==false)e.classList.remove('on');});
       box.appendChild(b);}
   }).catch(()=>{});
 }

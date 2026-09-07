@@ -103,7 +103,8 @@ function newRound(setup){
   if(R)for(const id in R.slots)if(R.slots[id])names[id]=R.slots[id].name;
   setup.names=names;
   const G=SIM.newState(seed,setup);
-  R={seed,setup:{drip:setup.drip,rhythm:setup.rhythm,cause:setup.cause,n:setup.n,names},
+  R={seed,setup:{drip:setup.drip,rhythm:setup.rhythm,cause:setup.cause,n:setup.n,names,
+                 train:!!setup.train},
      G, events:[], started:false, speed:1, savedAs:null,
      slots:R?R.slots:{a:null,b:null,c:null,d:null,e:null,f:null}};
   for(const id in R.slots)if(R.slots[id]){const c=G.ch.find(x=>x.id===id);
@@ -118,11 +119,12 @@ function doAct(cid,act,p){
   return ok;
 }
 function saveRecording(){
-  if(!R||!R.events.length)return null;
+  if(!R||!R.events.length||R.training)return null;   /* 熟悉環境不錄影 */
   const d=new Date(),z=n=>String(n).padStart(2,'0');
   const name=d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'-'+z(d.getHours())+z(d.getMinutes())
     +'_'+(R.G.cause?R.G.cause.id:'x')+'.json';
-  const rec={v:3,seed:R.seed,setup:R.setup,events:R.events,
+  const rec={v:4,engine:SIM.ENGINE,seed:R.seed,setup:R.setup,events:R.events,
+    familiarization:R.lastDrill||null,
     endedAt:d.toISOString(),cause:R.G.cause.n,over:R.G.over,dur:Math.round(R.G.t)};
   try{fs.writeFileSync(path.join(RECDIR,name),JSON.stringify(rec));R.savedAs=name;
     console.log('  ▸ 已存檔 recordings/'+name);}catch(e){console.error(e);}
@@ -133,6 +135,8 @@ function saveRecording(){
 function lobbyInfo(){
   return{t:'lobby',phase:R.G.phase,over:R.G.over,speed:R.speed,paused:R.G.paused,
     setup:{drip:R.setup.drip,rhythm:R.setup.rhythm,cause:R.setup.cause,n:R.setup.n},
+    training:!!R.training, drill:R.training?R.G.drill:null,
+    drillDone:R.training?R.G.drillDone:null, lastDrill:R.lastDrill||null,
     slots:SIM.K.SLOTS.slice(0,R.setup.n).map(s=>({id:s.id,c:s.c,coat:!!s.coat,
       name:R.slots[s.id]?R.slots[s.id].name:null,
       online:!!(R.slots[s.id]&&R.slots[s.id].ws)})),
@@ -218,13 +222,26 @@ function onMsg(ws,m){
     pushLobby(); return;}
   if(m.t==='start'){ if(R.G.phase!=='lobby')return;
     doAct(null,'__start'); R.started=true; pushLobby(); return;}
+  /* 熟悉環境：同一個房間、同一批人，換成練習假人開一局。
+     練習不錄影，結束時把 drill 完成時間留在 lastDrill 供正式場的 metadata 使用。 */
+  if(m.t==='trainStart'){ if(R.G.phase!=='lobby')return;
+    const prev=R.lastDrill;
+    newRound(Object.assign({},R.setup,{train:true}));
+    R.lastDrill=prev; R.training=true;
+    doAct(null,'__start'); R.started=true;
+    pushLobby(); broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
+  if(m.t==='trainEnd'){ if(!R.training)return;
+    R.lastDrill={done:R.G.drillDone, drill:R.G.drill, dur:Math.round(R.G.t)};
+    const st=Object.assign({},R.setup); delete st.train;
+    newRound(st); R.training=false; R.started=false;
+    pushLobby(); broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
   if(m.t==='pause'){ doAct(null,'__pause',{on:!!m.on}); pushLobby(); return;}
   if(m.t==='speed'){ R.speed=Math.max(1,Math.min(3,Number(m.v)||1)); pushLobby(); return;}
   if(m.t==='stop'){ if(!R.G.over){doAct(null,'__stop');saveRecording();} pushLobby(); return;}
   if(m.t==='newgame'){ newRound(m.setup||R.setup); pushLobby();
     broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
   if(m.t==='history'){ send(ws,{t:'history',h:SIM.history(R.G)}); return;}
-  if(m.t==='recording'){ send(ws,{t:'recording',rec:{v:3,seed:R.seed,setup:R.setup,
+  if(m.t==='recording'){ send(ws,{t:'recording',rec:{v:4,engine:SIM.ENGINE,seed:R.seed,setup:R.setup,
       events:R.events,cause:R.G.cause.n,over:R.G.over,dur:Math.round(R.G.t)}}); return;}
 }
 
