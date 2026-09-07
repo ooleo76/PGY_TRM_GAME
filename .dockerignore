@@ -1,0 +1,6 @@
+.git
+.gitignore
+node_modules
+recordings/*.json
+*.md
+extras/fly.toml

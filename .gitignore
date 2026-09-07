@@ -1,0 +1,9 @@
+node_modules/
+
+# 演練錄影檔含學員資料，不要進 public repo（IRB 考量）。
+# 資料夾本身要留著，所以保留 .gitkeep。
+recordings/*.json
+!recordings/.gitkeep
+
+.DS_Store
+*.log
