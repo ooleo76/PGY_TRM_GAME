@@ -70,6 +70,24 @@ body.mode-host #feed .f{font-size:18px;padding:8px 12px}
 #feed .f.big{background:rgba(22,80,100,.93);font-size:13px;border-left-color:#8FE3F5}
 body.mode-host #feed .f.big{font-size:21px}
 @keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+/* ── 直立手機的訊息列 ──
+   桌機／橫向時 #field 被 44vh 限高，畫布左右留黑邊，訊息疊在黑邊上不礙事。
+   直立手機的 #field 剛好等於病房比例、沒有黑邊，40% 寬的訊息會直接蓋掉
+   床右、電擊器與家屬那一側 —— 所以改成放在病房畫面下方，完全不重疊。 */
+#feedp{display:none}
+@media (max-width:640px){
+  body.mode-player #feed{display:none}
+  body.mode-player #feedp{display:flex;flex:none;flex-direction:column-reverse;
+    gap:4px;padding:5px 7px;background:#0B1219;border-top:1px solid var(--line);
+    max-height:66px;overflow:hidden;justify-content:flex-start}
+  body.mode-player #feedp:empty{display:none}
+  #feedp .f{background:rgba(18,30,40,.92);border-left:3px solid #3FD0E8;border-radius:7px;
+    padding:4px 8px;font-size:12px;line-height:1.35;color:#D6E2EC;flex:none}
+  #feedp .f b{font-weight:700;margin-right:5px}
+  #feedp .f.big{background:rgba(22,80,100,.93);border-left-color:#8FE3F5;font-weight:600}
+  #feedp .f.new{animation:slideUp .3s ease-out}
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .tb{position:absolute;top:6px;font-size:11px;padding:7px 9px;min-height:0;min-width:0;
  background:rgba(20,28,36,.92);border:1px solid var(--line);border-radius:8px;flex:none;z-index:5}
 #mode{right:8px}#spd{right:88px}#pausebtn{right:158px}
@@ -278,6 +296,7 @@ body.mode-replay #panel{display:none}
     <div class="sn" id="stripN"></div>
   </div>
  </div>
+ <div id="feedp"></div>
  <div id="who"></div>
  <div id="panel"><div id="youare"></div><div id="acts"></div></div>
  <div id="rp">
@@ -1610,8 +1629,13 @@ function paint(){
     +f.n+'</b>'+f.txt+'</div>').join('');
   if(fh!==_lastFeedH){
     const seen=new Set([...$('feed').children].map(x=>x.dataset.k));
-    _lastFeedH=fh;$('feed').innerHTML=fh;
-    [...$('feed').children].forEach(x=>{if(!seen.has(x.dataset.k))x.classList.add('new');});}
+    _lastFeedH=fh;
+    /* 兩個容器都填 —— 哪一個顯示由 CSS 依螢幕寬度決定。
+       #feedp 用 column-reverse，所以最新的一則永遠貼著病房畫面下緣。 */
+    for(const id of ['feed','feedp']){
+      const el=$(id); if(!el)continue;
+      el.innerHTML=fh;
+      [...el.children].forEach(x=>{if(!seen.has(x.dataset.k))x.classList.add('new');});}}
   if(MODE==='player'||SOLO){paintYouAre();buildPanel();}
   if(G.over&&(SOLO||REPLAY)&&!HIST){HIST=IHCA.history(SOLO?LOCAL:RP.finalG);renderSheet();}
   if(G.over&&!SOLO&&!REPLAY&&!HIST&&!_askedHist){_askedHist=1;NET.send({t:'history'});}
