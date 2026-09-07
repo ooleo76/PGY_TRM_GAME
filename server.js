@@ -337,8 +337,8 @@ setInterval(()=>{
     const sig=JSON.stringify(R.G.drill)+'|'+R.G.drillDone;
     if(sig!==R._drillSig){R._drillSig=sig;pushLobby();}
   }
-  /* 結束時自動存檔 */
-  if(R.G.over&&!R.savedAs)saveRecording();
+  /* 結束時自動存檔 —— 存完要推播，否則報表上的「重播這一場」不會出現 */
+  if(R.G.over&&!R.savedAs){saveRecording();pushLobby();}
   /* 訊息分流：私訊只給當事人 */
   if(R.G.outbox.length){
     const out=R.G.outbox.splice(0,R.G.outbox.length);
