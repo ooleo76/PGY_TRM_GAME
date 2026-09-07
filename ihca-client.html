@@ -1239,6 +1239,7 @@ function paintTC(){
      +'<h2>結束之後</h2><div class="g">'
      +'<button id="tcReport">看報表</button>'
      +'<button id="tcRec">下載錄影檔</button>'
+     +(LOBBY.mail?'<button id="tcMail" class="wide">📧 補寄一份到 '+LOBBY.mail+'</button>':'')
      +'<button id="tcNew" class="wide">重新開一局（同一批人）</button></div>'
      +(LOBBY.saved?'<p class="note">錄影已自動存到伺服器 recordings/'+LOBBY.saved+'</p>':'')
    ))
@@ -1257,6 +1258,7 @@ function paintTC(){
       NET.send({t:'setup',setup:Object.assign({},st,s)});});
     const on=(id,fn)=>{const el=$(id);if(el)el.onclick=fn;};
     on('tcStart',()=>NET.send({t:'start'}));
+    on('tcMail',()=>NET.send({t:'remail'}));
     on('tcTrain',()=>NET.send({t:'trainStart'}));
     on('tcTrainEnd',()=>{if(confirm('結束熟悉環境，回到教案設定？'))NET.send({t:'trainEnd'});});
     on('tcPause',()=>NET.send({t:'pause',on:!LOBBY.paused}));
@@ -1378,8 +1380,12 @@ function renderSheet(){
   if(HIST.talk.length){h+='<h4>全場的對話與回報</h4>';
     for(const t of HIST.talk)h+='<div class="talkr"><span class="tt">'+mmt(t.at)+'</span>'
       +'<b style="color:'+t.col+'">'+t.n+'</b>'+t.txt+'</div>';}
+  /* 看完報表最常想做的下一件事就是回去看某一段。
+     直接把當場的錄影檔帶進重播模式，不用再去挑檔案。 */
+  const canReplay=!REPLAY&&!isFile&&LOBBY&&LOBBY.saved;
   h+='<div class="btns"><button id="shCopy">複製報表文字</button>'
     +'<button id="shDl">下載 .txt</button>'
+    +(canReplay?'<button id="shReplay" class="go wide">▶ 重播這一場</button>':'')
     +'<button id="shClose" class="wide">關閉</button></div></div>';
   sh.innerHTML=h;sh.classList.add('on');
   requestAnimationFrame(()=>drawSwim($('swim')));
@@ -1394,6 +1400,9 @@ function renderSheet(){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='IHCA演練報表.txt';document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(a.href),4000);};
+  if($('shReplay'))$('shReplay').onclick=()=>{
+    /* 開新分頁，原本這一頁保持連線 —— 投影幕不會因為切去重播而斷掉 */
+    window.open(location.pathname+'?m=replay&f='+encodeURIComponent(LOBBY.saved),'_blank');};
   $('shClose').onclick=()=>sh.classList.remove('on');
 }
 
@@ -1494,6 +1503,14 @@ function replayGate(){
     rd.onload=()=>{try{if(rpLoad(JSON.parse(rd.result))!==false)e.classList.remove('on');}
       catch(err){alert('這個檔案讀不出來：'+err.message);}};
     rd.readAsText(f);};
+  /* 網址帶了 ?f=檔名 就直接載入，跳過挑選畫面 */
+  const want=QS.get('f');
+  if(want&&!isFile){
+    fetch('/recordings/'+encodeURIComponent(want)).then(r=>{
+      if(!r.ok)throw new Error('找不到 '+want);return r.json();})
+      .then(rec=>{if(rpLoad(rec)!==false)e.classList.remove('on');})
+      .catch(err=>{alert('自動載入失敗：'+err.message+'\n請從下面的清單挑一個。');});
+  }
   if(!isFile)fetch('/recordings').then(r=>r.json()).then(list=>{
     const box=$('rpList');
     if(!list.length){box.innerHTML='<p style="color:#8296A8;font-size:13px">伺服器上還沒有錄影檔。</p>';return;}

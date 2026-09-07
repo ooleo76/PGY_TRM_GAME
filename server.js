@@ -7,6 +7,7 @@
 const http=require('http'), fs=require('fs'), path=require('path'),
       crypto=require('crypto'), os=require('os');
 const SIM=require('./ihca-sim.js');
+const MAIL=require('./mailer.js');
 
 const PORT=Number(process.env.PORT||8080);
 /* 放到公開網路上時，用房間代碼擋住路人；不指定就每次隨機產生 */
@@ -111,7 +112,57 @@ function newRound(setup){
     if(c){c.n=R.slots[id].name;c.online=true;}}
   return R;
 }
+/* 存好檔之後順手寄一份到自己的信箱。沒設定環境變數就靜靜跳過。 */
+function mailOut(kind,name,json,summary){
+  if(!MAIL.enabled())return;
+  const d=new Date().toLocaleString('zh-TW',{hour12:false});
+  MAIL.send(
+    '[IHCA] '+kind+' '+d,
+    kind+'\n\n'+summary+'\n\n附件：'+name+'\n（引擎 '+SIM.ENGINE+'）\n',
+    name, json,
+    err=>{ if(err)console.error('  ▸ 寄信失敗：'+err.message+'（檔案仍在 recordings/）');
+           else console.log('  ▸ 已寄到 '+MAIL.TO); });
+}
+
 function record(cid,act,p){R.events.push({k:R.G.tick,c:cid,a:act,p:p||null});}
+
+/* 熟悉環境結束時單獨存一份檔。
+   它不是演練錄影（沒有教案、不能重播），而是「定向階段」的完成紀錄 ——
+   每個人各項核心互動的完成秒數，之後可以當共變量。 */
+function saveFamiliarization(){
+  const G=R.G;
+  const roster=G.ch.filter(c=>c.active).map(c=>({slot:c.id,name:c.n}));
+  const per={};
+  for(const r of roster){
+    const d=(G.drill||{})[r.slot]||{};
+    per[r.slot]={name:r.name,
+      items:SIM.K.DRILL.map(it=>({k:it.k,n:it.n,at:d[it.k]!==undefined?d[it.k]:null})),
+      complete:SIM.K.DRILL.every(it=>d[it.k]!==undefined),
+      lastAt:SIM.K.DRILL.reduce((a,it)=>d[it.k]!==undefined?Math.max(a,d[it.k]):a,0)};
+  }
+  const rec={kind:'familiarization', v:1, engine:SIM.ENGINE,
+    room:ROOM, seed:R.seed, n:R.setup.n,
+    startedAt:R.startedAt||null, endedAt:new Date().toISOString(),
+    dur:Math.round(G.t),
+    allDoneAt:G.drillDone,          /* 全員完成的秒數；沒完成就是 null */
+    roster, per};
+  try{
+    const d=new Date(), z=x=>String(x).padStart(2,'0');
+    const name='familiarization-'+d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())
+      +'-'+z(d.getHours())+z(d.getMinutes())+'.json';
+    const json=JSON.stringify(rec);
+    fs.writeFileSync(path.join(RECDIR,name),json);
+    console.log('  ▸ 已存檔 recordings/'+name
+      +(rec.allDoneAt!==null?'（全員完成 '+rec.allDoneAt+' 秒）':'（未全員完成）'));
+    rec.savedAs=name;
+    const ok=Object.values(rec.per).filter(x=>x.complete).length;
+    mailOut('熟悉環境紀錄',name,json,
+      '完成人數：'+ok+' / '+rec.roster.length
+      +'\n全員完成時間：'+(rec.allDoneAt!==null?rec.allDoneAt+' 秒':'未全員完成')
+      +'\n總時長：'+rec.dur+' 秒');
+  }catch(e){console.error(e);}
+  return rec;
+}
 function doAct(cid,act,p){
   if(!R)return;
   const ok=SIM.applyAct(R.G,cid,act,p);
@@ -126,8 +177,20 @@ function saveRecording(){
   const rec={v:4,engine:SIM.ENGINE,seed:R.seed,setup:R.setup,events:R.events,
     familiarization:R.lastDrill||null,
     endedAt:d.toISOString(),cause:R.G.cause.n,over:R.G.over,dur:Math.round(R.G.t)};
-  try{fs.writeFileSync(path.join(RECDIR,name),JSON.stringify(rec));R.savedAs=name;
-    console.log('  ▸ 已存檔 recordings/'+name);}catch(e){console.error(e);}
+  try{
+    const json=JSON.stringify(rec);
+    fs.writeFileSync(path.join(RECDIR,name),json);R.savedAs=name;
+    console.log('  ▸ 已存檔 recordings/'+name);
+    /* 信件內文直接放報表全文 —— 就算附件之後不見了，結論還在信箱裡 */
+    let txt='';
+    try{txt=SIM.reportText(R.G);}catch(e){txt='（報表產生失敗）';}
+    mailOut('演練錄影 · '+rec.cause,name,json,
+      '結果：'+(rec.over==='ROSC'?'ROSC':'未恢復循環')+'　時長：'+Math.round(rec.dur/60)+' 分\n'
+      +'熟悉環境：'+(rec.familiarization
+          ?(rec.familiarization.allDoneAt!==null?'全員完成 '+rec.familiarization.allDoneAt+' 秒':'未全員完成')
+          :'（這一場沒有做）')
+      +'\n\n'+'─'.repeat(40)+'\n'+txt);
+  }catch(e){console.error(e);}
   return name;
 }
 
@@ -140,7 +203,7 @@ function lobbyInfo(){
     slots:SIM.K.SLOTS.slice(0,R.setup.n).map(s=>({id:s.id,c:s.c,coat:!!s.coat,
       name:R.slots[s.id]?R.slots[s.id].name:null,
       online:!!(R.slots[s.id]&&R.slots[s.id].ws)})),
-    saved:R.savedAs};
+    saved:R.savedAs, mail:MAIL.enabled()?MAIL.TO:null};
 }
 function onOpen(ws){ send(ws,{t:'hi',need:'hello'}); }
 function authed(ws,m){
@@ -228,19 +291,30 @@ function onMsg(ws,m){
     const prev=R.lastDrill;
     newRound(Object.assign({},R.setup,{train:true}));
     R.lastDrill=prev; R.training=true;
-    doAct(null,'__start'); R.started=true;
+    doAct(null,'__start'); R.started=true; R.startedAt=new Date().toISOString();
     pushLobby(); broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
   if(m.t==='trainEnd'){ if(!R.training)return;
-    R.lastDrill={done:R.G.drillDone, drill:R.G.drill, dur:Math.round(R.G.t)};
+    /* newRound 會整個換掉 R，所以先存成區域變數，建完新局再掛回去 */
+    const drill=saveFamiliarization();
     const st=Object.assign({},R.setup); delete st.train;
-    newRound(st); R.training=false; R.started=false;
+    newRound(st); R.lastDrill=drill; R.training=false; R.started=false;
     pushLobby(); broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
   if(m.t==='pause'){ doAct(null,'__pause',{on:!!m.on}); pushLobby(); return;}
   if(m.t==='speed'){ R.speed=Math.max(1,Math.min(3,Number(m.v)||1)); pushLobby(); return;}
   if(m.t==='stop'){ if(!R.G.over){doAct(null,'__stop');saveRecording();} pushLobby(); return;}
-  if(m.t==='newgame'){ newRound(m.setup||R.setup); pushLobby();
+  if(m.t==='newgame'){ const drill=R.lastDrill;
+    newRound(m.setup||R.setup); R.lastDrill=drill; pushLobby();
     broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
   if(m.t==='history'){ send(ws,{t:'history',h:SIM.history(R.G)}); return;}
+  /* 手動補寄最近一次的存檔（網路斷過、或想再寄一份給共同主持人時用） */
+  if(m.t==='remail'){
+    if(!MAIL.enabled()){send(ws,{t:'log',e:[{m:'伺服器沒有設定寄信環境變數',p:1}]});return;}
+    if(!R.savedAs){send(ws,{t:'log',e:[{m:'還沒有可寄的存檔',p:1}]});return;}
+    try{const j=fs.readFileSync(path.join(RECDIR,R.savedAs),'utf8');
+      mailOut('補寄 · 演練錄影',R.savedAs,j,'教師手動補寄。');
+      send(ws,{t:'log',e:[{m:'已送出到 '+MAIL.TO,p:0}]});}
+    catch(e){send(ws,{t:'log',e:[{m:'補寄失敗：'+e.message,p:1}]});}
+    return;}
   if(m.t==='recording'){ send(ws,{t:'recording',rec:{v:4,engine:SIM.ENGINE,seed:R.seed,setup:R.setup,
       events:R.events,cause:R.G.cause.n,over:R.G.over,dur:Math.round(R.G.t)}}); return;}
 }
@@ -257,6 +331,11 @@ setInterval(()=>{
   while(accum>=stepMs&&steps<20){
     for(let i=0;i<R.speed;i++){SIM.use(R.G);SIM.step();}
     accum-=stepMs;steps++;
+  }
+  /* 熟悉環境進行中，檢核表有變動就把大廳狀態推給教師端 */
+  if(R.training){
+    const sig=JSON.stringify(R.G.drill)+'|'+R.G.drillDone;
+    if(sig!==R._drillSig){R._drillSig=sig;pushLobby();}
   }
   /* 結束時自動存檔 */
   if(R.G.over&&!R.savedAs)saveRecording();

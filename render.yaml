@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ihca
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ROOM
+        value: "2468"                  # 固定房間代碼，之後可在 Render 後台改
+      - key: TKEY
+        value: "emed2026"              # 教師金鑰，請改成你自己的
+
+      # ── 課後自動把錄影檔寄到信箱 ──
+      - key: MAIL_TO
+        value: "ooleo76@gmail.com"
+      - key: MAIL_USER
+        value: "ooleo76@gmail.com"     # 寄件帳號，通常跟收件同一個
+      - key: MAIL_PASS
+        sync: false                    # ★ 應用程式密碼絕對不要寫進這個檔案。
+                                       #   sync:false 會讓 Render 在後台問你，值只存在 Render 那邊。
