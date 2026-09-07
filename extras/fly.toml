@@ -1,0 +1,44 @@
+# ══════════════════════════════════════════════════════════════
+#  Fly.io 部署設定
+#
+#  build context 是 repo 根目錄，所以請從根目錄執行：
+#    fly deploy --config extras/fly.toml
+#
+#  第一次部署前，先建立存放錄影檔的磁碟區：
+#    fly volumes create ihca_data --region nrt --size 1
+# ══════════════════════════════════════════════════════════════
+app = "ihca"
+primary_region = "nrt"          # 東京，離台灣最近
+
+[build]
+  dockerfile = "extras/Dockerfile"
+
+[env]
+  PORT = "8080"
+  ROOM = "1234"                 # 固定房間代碼
+  # ★ TKEY 一定要設。沒設的話 server.js 會用隨機值當教師金鑰，
+  #   機器每次休眠醒來就換一組，你手上的 ?m=teacher&k=... 網址會失效。
+  TKEY = "7900"             # 改成你自己的
+
+# 錄影檔要留在重開機之後 —— 沒有這一段，機器一重啟資料就沒了。
+# 一場錄影只有幾十 KB，1GB 綽綽有餘。
+[mounts]
+  source = "ihca_data"
+  destination = "/app/recordings"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0      # 上課前 5 分鐘先開一次網址讓它醒來
+
+  # WebSocket 是長連線，閒置逾時要放寬，否則暫停討論時會被踢線
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 60
+    soft_limit = 40
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
