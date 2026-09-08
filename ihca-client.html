@@ -61,14 +61,28 @@ body.mode-host #ord .x{font-size:26px}
  background:#12301F;border-color:#2E8A67;border-radius:8px}
 #feed{position:absolute;right:6px;top:54px;bottom:8px;width:40%;max-width:230px;z-index:4;
  display:flex;flex-direction:column;gap:5px;pointer-events:none;overflow:hidden;justify-content:flex-end}
-body.mode-host #feed{max-width:400px;width:34%}
+body.mode-host #feed{max-width:400px;width:31%}
 #feed .f{background:rgba(10,18,26,.86);border-left:3px solid #3FD0E8;border-radius:7px;
  padding:5px 8px;font-size:12px;line-height:1.4;color:#D6E2EC}
-body.mode-host #feed .f{font-size:18px;padding:8px 12px}
+body.mode-host #feed .f{font-size:23px;padding:11px 15px;line-height:1.45}
+/* ── 紀錄表（只在投影幕左側）──
+   內容全部是「已經發生過的事」，所以全隊都看得到也不會洩漏現在幾分幾秒。 */
+#recbox{display:none}
+body.mode-host #recbox{display:block;position:absolute;left:8px;top:54px;bottom:8px;
+  width:31%;max-width:430px;z-index:4;pointer-events:none;overflow:hidden}
+#recbox table{width:100%;border-collapse:collapse;background:rgba(10,18,26,.88);
+  border-radius:9px;overflow:hidden;font-size:16px}
+#recbox th{background:rgba(63,208,232,.16);color:#8FE3F5;font-weight:600;
+  padding:6px 8px;text-align:left;font-size:15px;letter-spacing:.5px}
+#recbox td{padding:6px 8px;border-top:1px solid rgba(255,255,255,.07);
+  color:#EAF2F8;vertical-align:top;line-height:1.35}
+#recbox td.t{font-family:var(--mono);color:#8FE3F5;white-space:nowrap}
+#recbox td.e{color:#3A4652}
+#recbox .cap{color:#8296A8;font-size:14px;padding:4px 2px 6px}
 #feed .f.new{animation:slideIn .3s ease-out}
 #feed .f b{font-weight:700;margin-right:5px}
 #feed .f.big{background:rgba(22,80,100,.93);font-size:13px;border-left-color:#8FE3F5}
-body.mode-host #feed .f.big{font-size:21px}
+body.mode-host #feed .f.big{font-size:27px}
 @keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
 /* ── 直立手機的訊息列 ──
    桌機／橫向時 #field 被 44vh 限高，畫布左右留黑邊，訊息疊在黑邊上不礙事。
@@ -77,6 +91,7 @@ body.mode-host #feed .f.big{font-size:21px}
 #feedp{display:none}
 @media (max-width:640px){
   body.mode-player #feed{display:none}
+  body.mode-player #toast{top:4px;bottom:auto;font-size:12.5px;max-width:94%}
   body.mode-player #feedp{display:flex;flex:none;flex-direction:column;
     gap:4px;padding:5px 7px;background:#0B1219;border-top:1px solid var(--line)}
   body.mode-player #feedp:empty{display:none}
@@ -297,6 +312,7 @@ body.mode-replay #panel{display:none}
     <div class="sn" id="stripN"></div>
   </div>
  </div>
+ <div id="recbox"></div>
  <div id="feedp"></div>
  <div id="who"></div>
  <div id="panel"><div id="youare"></div><div id="acts"></div></div>
@@ -335,7 +351,7 @@ let ME=null;
 let G=null;                      /* 要畫的狀態 */
 let LOBBY=null;
 let sub=null, mode='tap', speed=1, toastT=0, jact=false;
-let orderTxt='';
+let orderTxt='', orderGrp=0, recF={}, recFld='rhythm';
 const _confirm={};
 let ettScope='Direct', ettBlade='3 號';
 let SOLO=(MODE==='solo'), REPLAY=(MODE==='replay');
@@ -674,12 +690,30 @@ function drawMon(){
     x.strokeStyle='rgba(60,80,70,.28)';x.lineWidth=1;
     for(let gx=0;gx<w;gx+=Math.max(12,w/8)){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.stroke();}
     x.beginPath();x.moveTo(0,h*o.base);x.lineTo(w,h*o.base);x.stroke();
-    x.strokeStyle=o.col;x.lineWidth=1.9;x.lineJoin='round';x.lineCap='round';x.beginPath();
+    const unlead=(id==='cEcg'&&G&&!G.leads);
+    x.strokeStyle=o.col;x.lineWidth=1.9;x.lineJoin='round';x.lineCap='round';
+    /* 還沒貼上監測貼片 —— 畫虛線平線，跟真正的 asystole（實線）區分開來 */
+    if(unlead)x.setLineDash([7,6]); else x.setLineDash([]);
+    x.beginPath();
     const base=h*o.base,amp=h*o.amp;
     for(let i=0;i<o.n;i++){const v=o.buf[(o.head+i)%o.n];
       const pxx=i*(w/(o.n-1)),pyy=base-v*amp;i?x.lineTo(pxx,pyy):x.moveTo(pxx,pyy);}
-    x.stroke();
+    x.stroke();x.setLineDash([]);
     x.fillStyle='rgba(255,255,255,.35)';x.fillRect(w-2,0,2,h);}
+}
+/* 紀錄表：縱軸時間、橫軸「心律／電擊／給藥／處置」。只有投影幕會畫。 */
+function paintRecs(){
+  if(MODE!=='host')return;
+  const box=$('recbox');if(!box)return;
+  const rs=(G&&G.recs)?G.recs:[];
+  if(!rs.length){box.innerHTML='<div class="cap">紀錄（還沒有人記錄）</div>';return;}
+  const show=rs.slice(-12);          /* 只留最近 12 筆，超過就往上捲掉 */
+  let h='<div class="cap">急救紀錄　共 '+rs.length+' 筆</div><table><tr><th>時間</th>'
+    +K.RECF.map(f=>'<th>'+f.n+'</th>').join('')+'</tr>';
+  for(const e of show)
+    h+='<tr><td class="t">'+mmt(e.t)+'</td>'
+      +K.RECF.map(f=>e[f.k]?'<td>'+e[f.k]+'</td>':'<td class="e">·</td>').join('')+'</tr>';
+  box.innerHTML=h+'</table>';
 }
 function paintMonNums(){
   if(!G)return;
@@ -831,7 +865,7 @@ function buildPanel(){
   const lead=G.leader===c.id;
 
   /* ── 子選單 ── */
-  if(BUSY&&sub&&['ready','order','orderTo','concern','clue'].indexOf(sub)<0)sub=null;
+  if(BUSY&&sub&&['ready','order','orderTxt','orderTo','concern','clue','rec','recPick'].indexOf(sub)<0)sub=null;
   if(sub){
     if(sub==='drug'){H(3,'l','抽藥（在急救車旁）');
       for(const m of K.DRUGS) m==='amio'?B(3,'am',K.ITEM[m].n+' ▸',SUB('amio'))
@@ -841,10 +875,11 @@ function buildPanel(){
       for(const d of K.AMIO)B(3,'a'+d,d+' mg',A('draw',{k:'amio',dose:d}),'go');
       B(3,'bk','← 返回',SUB('drug'),'ghost wide');setActs(strip3(L));return;}
     if(sub==='gear'){
-      B(3,'gc',K.ITEM.cath.n+' ('+G.caths+')',A('grab',{k:'cath'}),'',G.caths<=0);
-      B(3,'gio',K.ITEM.io.n,A('grab',{k:'io'}),'go');
-      B(3,'gn',K.ITEM.needle.n,A('grab',{k:'needle'}));
       B(3,'ge','插管器材 ▸',SUB('ett1'),'wide');
+      B(3,'gc',K.ITEM.cath.n+' ('+G.caths+')',A('grab',{k:'cath'}),'',G.caths<=0);
+      B(3,'gio',K.ITEM.io.n,A('grab',{k:'io'}));
+      B(3,'gn',K.ITEM.needle.n,A('grab',{k:'needle'}));
+      B(3,'gp',K.ITEM.peri.n,A('grab',{k:'peri'}));
       B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
     if(sub==='ett1'){H(3,'l','1/3　喉頭鏡');
       for(const x of K.SCOPES)B(3,'s'+x,K.SCOPEN[x],()=>{ettScope=x;sub='ett2';paint();},'go');
@@ -862,16 +897,37 @@ function buildPanel(){
       if(!vis.length)H(2,'n','目前什麼都不知道。');
       vis.forEach((q,i)=>H(2,'c'+i,'<b>'+K.SRC[q.src]+' · '+mmt(q.t)+(q.cast?' · 已公開':' · 尚未公開')+'</b>'+q.txt,'cl'));
       B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
-    if(sub==='order'){H(2,'l','1/2　下什麼 order');
-      for(const t of K.ORDERS)B(2,'o'+t,t,()=>{buzz(6);orderTxt=t;sub='orderTo';paint();},'talk');
+    if(sub==='order'){H(2,'l','1/3　哪一類');
+      K.ORDERGRP.forEach((g,i)=>B(2,'og'+i,g.n+' ▸',
+        ()=>{buzz(6);orderGrp=i;sub='orderTxt';paint();},'talk wide'));
       B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
-    if(sub==='orderTo'){H(2,'l','2/2　交給誰　<b>'+orderTxt+'</b>');
+    if(sub==='orderTxt'){const g=K.ORDERGRP[orderGrp]||K.ORDERGRP[0];
+      H(2,'l','2/3　'+g.n);
+      for(const t of g.o)B(2,'o'+t,t,()=>{buzz(6);orderTxt=t;sub='orderTo';paint();},'talk wide');
+      B(2,'bk','← 返回',SUB('order'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='orderTo'){H(2,'l','3/3　交給誰　<b>'+orderTxt+'</b>');
       for(const o of G.ch){ if(o.id===c.id||o.active===false)continue;
         B(2,'ot'+o.id,'<span class="dot" style="background:'+o.c+'"></span>'+o.n
           +(o.busy?'（'+o.busy.l+'）':o.id===G.cpr?'（壓胸中）':''),
           A('order',{txt:orderTxt,to:o.id}),'talk who');}
       B(2,'otn','不指定 — 對全隊說',A('order',{txt:orderTxt}),'go wide');
-      B(2,'bk','← 返回',SUB('order'),'ghost wide');setActs(strip3(L));return;}
+      B(2,'bk','← 返回',SUB('orderTxt'),'ghost wide');setActs(strip3(L));return;}
+    if(sub==='rec'){
+      H(2,'l','時間已經記在按下的那一刻。以下四欄都可以留空。');
+      for(const f of K.RECF){
+        B(2,'rf'+f.k,f.n+'：'+(recF[f.k]||'（空白）')+' ▸',
+          ()=>{buzz(6);recFld=f.k;sub='recPick';paint();},
+          recF[f.k]?'go wide':'wide');}
+      B(2,'rok','✔ 送出紀錄',()=>{A('recSubmit',recF)();recF={};sub=null;},'hot wide');
+      B(2,'bk','← 取消',()=>{recF={};sub=null;paint();},'ghost wide');
+      setActs(strip3(L));return;}
+    if(sub==='recPick'){
+      const f=K.RECF.find(x=>x.k===recFld)||K.RECF[0];
+      H(2,'l','選一個「'+f.n+'」');
+      for(const o of f.o)B(2,'rp'+o,o,()=>{buzz(6);recF[f.k]=o;sub='rec';paint();},
+        recF[f.k]===o?'go':'');
+      B(2,'rpc','留空白',()=>{buzz(6);recF[f.k]=null;sub='rec';paint();},'ghost wide');
+      B(2,'bk','← 返回',SUB('rec'),'ghost wide');setActs(strip3(L));return;}
     if(sub==='concern'){H(2,'l','提出疑慮 — 三個強度，由輕到重。這在報表上會單獨列出。');
       K.CONCERN.forEach((t,i)=>B(2,'cc'+i,'⚠ '+t,A('concern',{txt:t}),i===2?'hot wide':'warn wide'));
       B(2,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
@@ -892,9 +948,17 @@ function buildPanel(){
   if(G.check>0){
     H(1,'chk','心律檢查中 — 全部停手。停頓每多一秒，灌流就掉一分。',null,1);
     if(lead&&k==='foot'){
-      B(1,'cs','宣告：可電擊',A('callRhythm',{v:'shock'}),'hot',false,1);
-      B(1,'cn','宣告：不可電擊',A('callRhythm',{v:'noshock'}),'go',false,1);}
-    else if(lead)H(1,'cl','Leader 要站到床尾才能做判讀宣告。',null,1);
+      if(!G.check_id){
+      H(1,'idl','1/2　這是什麼節律？',null,1);
+      for(const r of K.RIDS)B(1,'id'+r.k,r.n,A('callRhythm',{r:r.k}),'lead',false,1);
+    }else{
+      H(1,'idl','2/2　已辨識為 <b>'+((K.RIDS.find(x=>x.k===G.check_id)||{}).n||G.check_id)
+        +'</b> —— 那要怎麼做？',null,1);
+      B(1,'cs','準備電擊',A('callDecision',{v:'shock'}),'hot',false,1);
+      B(1,'cn','繼續 CPR',A('callDecision',{v:'noshock'}),'go',false,1);
+    }
+  }
+    else if(lead)H(1,'cl','Leader 要站到床尾才能辨識心律。',null,1);
     else H(1,'cw','等 Leader'+(G.leader?'（'+C(G.leader).n+'）':'')+'宣告判讀。');
   }
   if(G.cpr===c.id){const f=Math.round(c.fat*100);
@@ -962,10 +1026,20 @@ function buildPanel(){
       H(1,'eh',hd?'走到 '+hd.n+' 旁邊，他才會出現插管選項。':'把器材帶到床頭旁邊。');}
   }
   if(eq==='pc')B(1,'cht','查病歷 12s',A('chart'),'go',false,5);
+  /* 站在急救車旁，拿東西就是「現在能做的事」，不該埋在第三層 */
+  if(eq==='cart'&&!c.hold&&!c.push){
+    B(1,'dr','抽藥 ▸',SUB('drug'),'go',false,2);
+    B(1,'gr','拿器材 ▸',SUB('gear'),'go',false,2);}
+  if(eq==='pc')B(1,'tc','📢 報時給全隊',A('timeCall'),'talk wide',false,5);
+  if(eq==='pc')B(1,'rec','📝 紀錄一筆',function(){recF={};A('recBegin').call(this);
+    sub='rec';paint();},'go wide',false,5);
   const canAsk=G.family.gone?(k==='door'):(Math.hypot(c.x-G.family.x,c.y-G.family.y)<140);
   if(canAsk)B(1,'ask','問家屬與護理師 10s',A('ask'),'go',false,5);
+  if(k==='foot'&&!lead)
+    B(1,'ld',G.leader?'接手 Leader（向 '+C(G.leader).n+' 交接）':'★ 宣告：我是 Leader',
+      A('claimLead'),'lead wide',false,1);
   if(lead&&k==='foot'&&G.check<=0&&G.phase!=='post')
-    B(1,'rk','停下來檢查心律（上限 '+K.CHECKMAX+' 秒）',A('rhythmCheck'),'warn wide',false,3);
+    B(1,'rk','停止按壓，檢查心律',A('rhythmCheck'),'warn wide',false,3);
   if(G.phase==='post'){
     H(1,'po','已確認 ROSC。停止壓胸、量血壓、確認氣道，然後由 Leader 宣告結束交班。','hint good');
     if(lead&&k==='foot')B(1,'end','宣告急救結束、交班',confirmOnce('end','宣告急救結束、交班',A('endCase')),'lead wide',false,3);}
@@ -974,6 +1048,7 @@ function buildPanel(){
   /* ── ② 溝通 ──
      這一層在 busy 期間仍然開放，而且與論文指標有關的按鈕（複誦、回報完成、
      喊出線索）固定在最上面、一次點擊，避免把「找按鈕的時間」量進延遲指標。 */
+  if(k==='foot'&&lead)B(2,'or','下 Order ▸',SUB('order'),'talk wide');
   if(G.order&&G.order.by!==c.id&&!G.order.ack.includes(c.id)){
     const mine=(!G.order.to||G.order.to===c.id);
     B(2,'ack',(mine?'✓ 複誦：':'✓ 代為回應：')+G.order.txt,A('ack'),mine?'go wide':'talk wide');}
@@ -983,11 +1058,8 @@ function buildPanel(){
     .forEach(q=>B(2,'ct'+q.src,'📢 大聲喊出：'+K.SRC[q.src],A('cast',{src:q.src}),'go wide'));
   B(2,'rdy','📢 回報 ▸',SUB('ready'),'talk wide');
   B(2,'cn','⚠ 提出疑慮 ▸',SUB('concern'),'warn wide');
-  if(k==='foot'){
-    if(!lead)B(2,'ld',G.leader?'接手 Leader（向 '+C(G.leader).n+' 交接）':'★ 宣告：我是 Leader',
-      A('claimLead'),'lead wide');
-    else B(2,'or','下 Order ▸',SUB('order'),'talk wide');}
-  if(eq==='pc')B(2,'tc','📢 報時給全隊',A('timeCall'),'talk');
+
+
 
   if(!BUSY){
   /* ── ③ 準備與雜項 ── */
@@ -996,7 +1068,6 @@ function buildPanel(){
     +(c.ettSpec?'（'+(K.SCOPEN[c.ettSpec.scope]||'')+'・'+c.ettSpec.blade+'・'+c.ettSpec.tube+' 號管）':'')
     +'</b>','held');
   if(eq==='cart'&&!c.hold&&!c.push){
-    B(3,'dr','抽藥 ▸',SUB('drug'));B(3,'gr','拿器材 ▸',SUB('gear'));
     G.tray.forEach((it,i)=>B(3,'tr'+i,'拿回 '+K.ITEM[it.k].n+(it.dose?' '+it.dose+'mg':''),
       A('takeTray',{k:it.k}),'wide'));}
   if(eq==='defib'&&!c.push){
@@ -1613,12 +1684,14 @@ const SFX={tick:()=>tone(1180,.035,'square',.05),t30:()=>tone(1520,.1,'square',.
  alarm:()=>{tone(880,.1,'square',.08);setTimeout(()=>tone(880,.1,'square',.08),160);},
  rosc:()=>{[660,880,1170].forEach((f,i)=>setTimeout(()=>tone(f,.18,'sine',.11),i*110));},
  bcast:()=>{tone(600,.08,'sine',.09);setTimeout(()=>tone(900,.1,'sine',.09),80);setTimeout(()=>tone(1200,.12,'sine',.09),170);}};
-let W_={cnt:0,shocks:0,check:0,charged:false,down:0,air:'BVM',order:null,rosc:false,clues:0};
+let W_={cnt:0,shocks:0,check:0,charged:false,chgT:0,down:0,air:'BVM',order:null,rosc:false,clues:0};
 function sfxWatch(){
   if(!G||MODE==='teacher'||REPLAY)return;
   if(G.cnt!==W_.cnt){if(G.cnt>W_.cnt)SFX.tick();W_.cnt=G.cnt;}
   if(G.needPause&&!W_.need)SFX.t30(); W_.need=G.needPause;
   if(G.shocks>W_.shocks){SFX.zap();W_.shocks=G.shocks;}
+  /* 充電中的爬升音 —— SFX.chg 一直是定義了但沒人呼叫的死碼 */
+  if(G.df.chargeT>0&&!(W_.chgT>0))SFX.chg(); W_.chgT=G.df.chargeT;
   if(G.df.charged&&!W_.charged)SFX.ok(); W_.charged=G.df.charged;
   if(G.check>0&&W_.check<=0)SFX.alarm(); W_.check=G.check;
   if(G.clues.length>W_.clues){SFX.ok();W_.clues=G.clues.length;}
@@ -1684,7 +1757,7 @@ function loop(ts){
     pushStrip(dt0);
     sfxWatch();
     drawWard(cx,cv,ME);
-    drawMon();paintMonNums();paintStrip();
+    drawMon();paintMonNums();paintStrip();paintRecs();
     const meNow=meC();
     const atRec=meNow?nearEq(meNow)==='pc':false;
     const showT=(MODE==='host'||MODE==='teacher'||REPLAY)?true:atRec;

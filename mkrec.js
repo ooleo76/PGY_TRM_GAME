@@ -49,8 +49,9 @@ until(()=>G.df.charged,15);
 
 /* 心律檢查 → 判讀 → clear → 放電（不轉律就再來一次） */
 for(let round=0;round<5&&!A.RH(G.rhythm).org;round++){
-  act('b','rhythmCheck'); wait(2);            /* 看兩秒再宣告，不是零點幾秒亂按 */
-  act('b','callRhythm',{v:A.RH(G.rhythm).shock?'shock':'noshock'});
+  act('b','rhythmCheck'); wait(2);            /* 看兩秒再辨識，不是零點幾秒亂按 */
+  act('b','callRhythm',{r:{VF:'VF',pVT:'VT',PEA:'PEA',asystole:'ASYS',sinus:'PEA'}[G.rhythm]});
+  act('b','callDecision',{v:A.RH(G.rhythm).shock?'shock':'noshock'});
   until(()=>G.check<=0,12);
   go('d','bedR',at('d','bedR'));
   act('d','clear'); wait(1.5); act('d','shock'); wait(1);
@@ -86,6 +87,10 @@ act('f','scan'); until(()=>G.clues.length>1,25);
 act('f','cast',{src:'echo'});
 act('f','drop');
 
+/* 紀錄員補一筆 */
+go('f','pc',near('f','pc')); act('f','recBegin'); wait(4);
+act('f','recSubmit',{rhythm:'VF',shock:'200 J',drug:'Epinephrine 1 mg',proc:'貼監測貼片'});
+
 /* 問家屬 + 帶家屬出去 */
 go('a','bedR',at('a','bedR'));
 act('a','ask'); until(()=>G.clues.length>2,20);
@@ -101,7 +106,8 @@ act('c','cprStart');
 /* 撐到起效 — A12 之後這段鬆懈會延後 ROSC */
 until(()=>G.rosc,150);
 act('b','rhythmCheck'); wait(2);
-act('b','callRhythm',{v:'noshock'});
+act('b','callRhythm',{r:'PEA'});
+act('b','callDecision',{v:'noshock'});
 until(()=>G.check<=0,12);
 act('c','checkPulse'); until(()=>P('c').recent.indexOf('我摸到脈搏了！')>=0,12);
 act('c','ready',{txt:'我摸到脈搏了！'});

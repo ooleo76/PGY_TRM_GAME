@@ -113,9 +113,14 @@ ESCORTLINES:['我先帶您到外面坐一下','裡面同仁正在全力急救','
 FAMLINES:['怎麼會這樣…','拜託救救他','我要怎麼辦','剛剛還好好的啊','醫生他會不會有事','是不是我沒注意到'],
 FAMPULL:['家屬拉住你問話','家屬擋在旁邊','家屬一直拉著你的手'],
 SRC:{chart:'病歷',fam:'家屬與護理師',echo:'床邊超音波'},
-ORDERS:['開始壓胸','壓胸換手','加強壓胸品質','建立血管通路','給 Epinephrine 1mg',
-        '準備插管','準備電擊','全部 CLEAR，手離開病人','有人去查病歷','有人做床邊超音波',
-        '把家屬帶出去','停止按壓，檢查心律'],
+/* Order 依處置分類 —— 手機上先選類別再選句子，掃描成本比 12 條平鋪低很多 */
+ORDERGRP:[
+ {n:'壓胸',    o:['開始壓胸','壓胸換手','加強壓胸品質']},
+ {n:'呼吸道',  o:['注意通氣時機','準備插管']},
+ {n:'藥物/IV', o:['Epinephrine 1 mg','Amiodarone 300 mg','Amiodarone 150 mg',
+                  'N/S 500 ml challenge','輸血']},
+ {n:'找原因',  o:['有人去查病歷','有人推超音波來做','詢問家屬發生什麼事']}
+],
 DRIPS:[
  {id:'none',n:'沒有點滴',short:'—'},
  {id:'ns',  n:'生理食鹽水 500ml',short:'N/S'},
@@ -163,6 +168,22 @@ DRILL:[
 CONCERN:['我有疑慮，可以再確認一次嗎？','這樣我不太放心','停一下 — 這樣有安全問題'],
 WALL:{h:22,m:11}
 };
+K.ORDERS=K.ORDERGRP.reduce((a,g)=>a.concat(g.o),[]);
+/* Leader 要先「認出這是什麼節律」，再決定「電或不電」。
+   兩者分開記 —— 認對了卻決策錯（例如認出 VF 卻說繼續 CPR）是最值得討論的那一格。 */
+K.RECF=[
+ {k:'rhythm',n:'心律',o:['VF','VT','PEA','Asystole','竇性心律']},
+ {k:'shock', n:'電擊',o:['120 J','150 J','200 J']},
+ {k:'drug',  n:'給藥',o:['Epinephrine 1 mg','Amiodarone 300 mg','Amiodarone 150 mg',
+                         'Calcium gluconate','Sodium bicarbonate','血栓溶解劑',
+                         'N/S 500 ml','輸血']},
+ {k:'proc',  n:'處置',o:['開始壓胸','壓胸換手','貼監測貼片','建立 IV','打骨內針 IO',
+                         '插管','針刺減壓','心包穿刺','超音波','量 NIBP','摸脈搏','ROSC']}
+];
+K.RIDS=[{k:'VF',n:'VF'},{k:'VT',n:'VT'},{k:'PEA',n:'PEA'},{k:'ASYS',n:'Asystole'}];
+/* 螢幕上看到的節律 → 正確答案。ROSC 後是規則心律，在監視器上跟 PEA 分不出來，
+   一樣要靠摸脈搏，所以正解記為 PEA。 */
+const RIDOF=r=>({VF:'VF',pVT:'VT',PEA:'PEA',asystole:'ASYS',sinus:'PEA'})[r]||'PEA';
 const RH=id=>K.RHY[id]||K.RHY.asystole;
 const mmt=s=>{s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');};
 
@@ -236,18 +257,18 @@ function newState(seed,setup){
     order:null,orders:0,ordersAck:0,ordersAckOther:0,ordersDone:0,
     ackDelay:[],doneDelay:[],orderLog:[],
     concerns:[],
-    log:[],outbox:[],talk:[],tl:[],checks:[],acts:[],pts:[],
+    log:[],outbox:[],talk:[],tl:[],checks:[],acts:[],pts:[],recs:[],
     num:0,den:0,pause:0,maxPause:0,sinceCheck:0,maxGap:0,lateWarn:0,
     tFirstCpr:null,num2:0,den2:0,maxPauseAfterStart:0,
-    cprSec:[],secAcc:0,ccfPen:0,ccfPenFinal:null,
+    cprSec:[],secAcc:0,ccfPen:0,ccfPenFinal:null,ventAt:[],
     cprPaused:0,fatiguedCprT:0,noVentETT:0,ventsAfterEtt:0,
     pulseChecks:0,cprMoved:0,swaps:0,zapped:0,leads:false,timeShown:0,
     tray:[],probeHolder:null,
-    family:{x:640,y:330,line:0,lt:0,gone:false,pull:40*(6/Math.max(2,NP))},famOut:null,famDelays:0,
+    family:{x:150,y:640,line:0,lt:0,gone:false,pull:40*(6/Math.max(2,NP))},famOut:null,famDelays:0,
     eq:JSON.parse(JSON.stringify(K.EQ0)),
     np:NP,
     ch:K.SLOTS.map((c,i)=>({...c,active:i<NP,n:names[c.id]||c.id.toUpperCase(),
-      x:250+i*36,y:752,vx:0,vy:0,path:[],hold:null,
+      x:250+i*36,y:752,vx:0,vy:0,path:[],hold:null,recAt:null,
       busy:null,bob:0,fat:0,push:null,down:0,zap:0,act:0,ettSpec:null,dose:null,
       recent:[],downWhy:null,bubble:null,online:false,moving:false,
       cprT:0,dist:0,jobs:0,said:0,slow:false,span:null}))};
@@ -363,7 +384,6 @@ function begin(c,l,dur,fn,kind){
   /* A1：一個人不可能一邊壓胸一邊上針／摸脈搏／掃超音波。
      和 leaveCpr 分開計數 — 「走開」與「為了做別的事停手」在 debriefing 是兩件事。 */
   if(S.cpr===c.id){S.cpr=null;S.cprPaused++;endSpan(c);
-    say(c.n+' 為了「'+l+'」停下壓胸 — 沒有人在壓了。');
     tl(c.n+' 停下壓胸去做：'+l);}
   const slow=nearFam(c); const d=slow?dur*1.35:dur;
   c.slow=slow; c.busy={l,r:d,d:d,fn}; c.jobs++;
@@ -532,6 +552,21 @@ const ACT={
    pt(c,'say',p.txt);
    push2feed(c,p.txt);say(c.n+' 回報：'+p.txt);
    if(p.txt==='我摸到脈搏了！'||p.txt==='病人有脈搏，停止壓胸')announceRosc(c);},
+ /* 按下「紀錄」的那一刻就把時間釘住 —— 填完表單才送出，時間才不會被填表拖慢 */
+ recBegin(c){if(!active(c)||nearEq(c)!=='pc')return;c.recAt=S.t;},
+ recSubmit(c,p){if(!active(c)||nearEq(c)!=='pc')return;
+   p=p||{};
+   const e={t:(c.recAt!==null&&c.recAt!==undefined)?c.recAt:S.t,by:c.id,n:c.n};
+   let any=false;
+   for(const f of K.RECF){const v=p[f.k];
+     if(v&&f.o.indexOf(v)>=0){e[f.k]=v;any=true;}else e[f.k]=null;}
+   c.recAt=null;
+   if(!any)return;
+   S.recs.push(e);
+   const parts=K.RECF.filter(f=>e[f.k]).map(f=>f.n+'：'+e[f.k]);
+   pt(c,'say','紀錄');
+   say('【紀錄】'+mmt(e.t)+'　'+parts.join('　'));
+   tl('紀錄：'+parts.join('／'));},
  timeCall(c){if(nearEq(c)!=='pc')return;
    push2feed(c,'已經 '+Math.floor(S.t/60)+' 分 '+Math.floor(S.t%60)+' 秒，距上次心律檢查 '
      +Math.floor(S.sinceCheck/60)+' 分 '+Math.floor(S.sinceCheck%60)+' 秒',1);
@@ -595,10 +630,12 @@ const ACT={
  bag(c){if(!active(c)||nearSt(c)!=='head')return;
    c.act=2.0;
    if(S.pauseVent){S.breaths++;S.vents++;
-     if(S.noVentT>10&&S.breaths===1){S.badVent++;say('通氣慢了 '+Math.round(S.noVentT)+' 秒才來 — 壓胸一直停著。');}
+     S.ventAt.push(S.t);while(S.ventAt.length&&S.ventAt[0]<S.t-30)S.ventAt.shift();
+     if(S.noVentT>10&&S.breaths===1){S.badVent++;}
      if(S.breaths>=2){S.pauseVent=false;S.holdCpr=true;S.cnt=0;S.needPause=false;
        say('兩次通氣完成 — 壓胸的人要自己按「繼續壓胸」。');}}
    else if(S.air==='ETT'){S.vents++;S.ventsAfterEtt++;S.ventT=0;
+     S.ventAt.push(S.t);while(S.ventAt.length&&S.ventAt[0]<S.t-30)S.ventAt.shift();
      if(S.t-(S.lastVent||-99)<4){S.overVent++;say('通氣太快了 — 過度通氣會把靜脈回流壓掉。');}
      S.lastVent=S.t;}
    else if(S.air==='bad'){say('擠得下去，但胸廓沒有起伏 — 氣沒進到肺裡。');}
@@ -727,20 +764,28 @@ const ACT={
    pt(c,'lead','喊停檢查心律');
    say('第 '+S.round+' 次心律檢查 — 全部停手，看螢幕。');
    tl('第 '+S.round+' 次心律檢查（'+RH(S.rhythm).short+'）','key');},
- callRhythm(c,p){if(!isLeader(c)||S.check<=0||!S.checkRec||S.checkRec.call)return;
+ /* 第一步：這是什麼節律？ */
+ callRhythm(c,p){if(!isLeader(c)||S.check<=0||!S.checkRec||S.checkRec.id)return;
+   if(!K.RIDS.some(x=>x.k===p.r))return;
+   const truth=RIDOF(S.checkRec.rhythm);
+   S.checkRec.id=p.r;S.checkRec.idCorrect=(p.r===truth);S.checkRec.idAt=K.CHECKMAX-S.check;
+   const nm=(K.RIDS.find(x=>x.k===p.r)||{}).n||p.r;
+   pt(c,'lead','辨識：'+nm);
+   say('【心律辨識】'+c.n+'：'+nm);},
+ /* 第二步：那要怎麼做？ */
+ callDecision(c,p){if(!isLeader(c)||S.check<=0||!S.checkRec||!S.checkRec.id||S.checkRec.call)return;
+   if(p.v!=='shock'&&p.v!=='noshock')return;
    const truth=RH(S.checkRec.rhythm).shock?'shock':'noshock';
    const elapsed=K.CHECKMAX-S.check;
    S.checkRec.call=p.v;S.checkRec.correct=(p.v===truth);
-   S.checkRec.callAt=elapsed;                          /* 宣告時點：判讀速度 */
-   S.checkRec.dur=Math.max(K.CHECKMIN,elapsed);        /* 實際停頓：受最短判讀時間保護 */
-   pt(c,'lead','判讀：'+(p.v==='shock'?'可電擊':'不可電擊')+(S.checkRec.correct?' ✓':' ✗'));
-   say('【判讀】'+c.n+' 宣告：'+(p.v==='shock'?'可電擊 — 準備電擊':'不可電擊 — 繼續 CPR'));
-   tl('判讀宣告：'+(p.v==='shock'?'可電擊':'不可電擊')+(S.checkRec.correct?' ✓':' ✗'),'key');
+   S.checkRec.callAt=elapsed;
+   S.checkRec.dur=Math.max(K.CHECKMIN,elapsed);
+   pt(c,'lead',(p.v==='shock'?'準備電擊':'繼續 CPR')+(S.checkRec.correct?' ✓':' ✗'));
+   say('【決策】'+c.n+'：'+(p.v==='shock'?'準備電擊':'繼續 CPR'));
+   tl('辨識 '+S.checkRec.id+(S.checkRec.idCorrect?' ✓':' ✗')
+     +'　決策 '+(p.v==='shock'?'電擊':'繼續 CPR')+(S.checkRec.correct?' ✓':' ✗'),'key');
    S.checks.push(S.checkRec);S.checkRec=null;S.sinceCheck=0;
-   /* A4：判讀不可能在零點幾秒完成，沒走滿最短時間就繼續停 */
-   S.check=Math.max(0,K.CHECKMIN-elapsed);
-   if(S.check<=0)say('停頓結束 — 立刻恢復壓胸。');
-   else say('判讀已宣告 — 看完這段心電圖就恢復壓胸。');},
+   S.check=Math.max(0,K.CHECKMIN-elapsed);},
 
  endCase(c){if(!isLeader(c)||S.phase!=='post')return;pt(c,'lead','宣告結束');finish(true);},
 
@@ -802,7 +847,7 @@ function step(){
     const period=.545*(1+cc.fat*K.FATRATE);
     S.beat+=dt;if(S.beat>=period){S.beat=0;S.cnt++;
       if(S.air!=='ETT'&&S.cnt>=30&&!S.needPause){S.needPause=true;say('壓到 30 下 — 要喊停讓床頭通氣。');}
-      if(S.air!=='ETT'&&S.cnt===38)say('超過 30 下還沒停 — 病人沒有得到通氣。');}
+      }
     if(cc.fat>=K.FATWARN&&!cc.fatWarn){cc.fatWarn=1;
       say(cc.n+' 的壓胸明顯慢下來了 — 該換手了。');}
     if(cc.fat<K.FATWARN&&cc.fatWarn)cc.fatWarn=0;}
@@ -822,7 +867,7 @@ function step(){
     if(!S.fixed&&S.decay>=(S.rhythm==='pVT'?60:105)){
       const nx=S.rhythm==='pVT'?'VF':(S.rhythm==='VF'||S.rhythm==='PEA')?'asystole':null;
       if(nx){S.rhythm=nx;S.decays++;S.decay=30;
-        say('灌流一直上不來 — 節律掉成 '+RH(nx).short+'。');tl('節律惡化 → '+RH(nx).short,'key');}
+        tl('節律惡化 → '+RH(nx).short,'key');}
       else S.decay=60;}
   }
 
@@ -893,7 +938,7 @@ function step(){
   /* A8：插管後不會自己給氣。床頭沒有每 6 秒擠一次，就是真的沒有通氣。 */
   if(S.air==='ETT'&&!S.rosc){S.ventT+=dt;
     if(S.ventT>=10){S.ventT-=10;S.noVentETT+=10;
-      say('插管後已經超過 10 秒沒有給氣 — 床頭要每 6 秒擠一次。');}}
+      }}
   if(S.nibp.r>0){S.nibp.r-=dt;if(S.nibp.r<=0){
     if(S.rosc){const sys=84+Math.floor(rnd()*26),dia=46+Math.floor(rnd()*16);
       S.nibp.val=sys+'/'+dia;say('NIBP：'+S.nibp.val+' — 有血壓了，但偏低，需要後續處理。');
@@ -906,11 +951,11 @@ function step(){
     if(S.check<=0){
       if(S.checkRec){S.checkRec.call=null;S.checkRec.correct=null;
         S.checkRec.callAt=null;S.checkRec.dur=K.CHECKMAX;
-        S.checks.push(S.checkRec);S.checkRec=null;
-        say('停頓 '+K.CHECKMAX+' 秒到了，Leader 沒有做出判讀宣告 — 恢復壓胸。');}
+        if(!S.checkRec.id){S.checkRec.id=null;S.checkRec.idCorrect=null;}
+        S.checks.push(S.checkRec);S.checkRec=null;}
       S.sinceCheck=0;}}
   else{S.sinceCheck+=dt;
-    if(S.sinceCheck>125&&!S.lateWarn){S.lateWarn=1;say('已經超過兩分鐘沒有檢查心律了。');}
+
     if(S.sinceCheck<=125)S.lateWarn=0;}
   S.maxGap=Math.max(S.maxGap,S.sinceCheck);
 
@@ -919,7 +964,7 @@ function step(){
 
   if(!S.leader&&S.phase==='play'){S.noLeaderT+=dt;
     if(S.noLeaderT>S.noLeaderWarn+45){S.noLeaderWarn=S.noLeaderT;
-      say('還沒有人宣告 Leader — 沒有人能下 order，也沒有人能喊停檢查心律。');}}
+      }}
 
   if(!S.family.gone&&!S.train){
     S.family.lt+=dt;
@@ -984,10 +1029,20 @@ function physOf(G){
   const co2=on?Math.max(3,Math.round(24*q)):0;
   return{hr:hr0,sp:null,co2};
 }
+/* EtCO₂ 是「吐出來的氣」測到的 —— 沒有人給氣就沒有波形，
+   壓胸壓得再好也一樣是平的。每一次真的擠下去才畫出一個方波。 */
 function co2At(G,t){
   const p=physOf(G);if(!p.co2)return 0;
-  const per=G.air==='ETT'?6:5,x=fract(t/per)*per,a=p.co2/50;
-  return x<.45?a*(x/.45):x<per*.72?a*.97:x<per*.72+.45?a*(1-(x-per*.72)/.45):0;
+  const a=p.co2/50, V=G.ventAt||[];
+  let last=null;
+  for(let i=V.length-1;i>=0;i--){if(V[i]<=t){last=V[i];break;}}
+  if(last===null)return 0;
+  const x=t-last;
+  if(x<0.30)return 0;                   /* 吸氣期，還沒吐出來 */
+  if(x<0.60)return a*((x-0.30)/0.30);   /* 上升支 */
+  if(x<2.40)return a*0.97;              /* 平台 */
+  if(x<2.75)return a*(1-(x-2.40)/0.35); /* 下降支 */
+  return 0;
 }
 
 /* ═══════════ 報表（第 5 項：結果區精簡） ═══════════ */
@@ -995,6 +1050,12 @@ function report(G){
   const old=S;S=G;
   const ccf=Math.round(ccfNow()*100)||0;
   const mm=s=>(s===null||s===undefined)?'—':mmt(s);
+  /* 時間長度一律寫成「幾分幾秒」，不要只丟一個大秒數 */
+  const dur=x=>{
+    if(x===null||x===undefined||isNaN(x))return '—';
+    const v=Math.round(x*10)/10, w=Math.floor(v), r=Math.round((v-w)*10);
+    if(w<60)return (r?(w+'.'+r):w)+' 秒';
+    return Math.floor(w/60)+' 分 '+(w%60)+' 秒';};
   const pct=(a,b)=>b?Math.round(a/b*100)+'%':'—';
   const outcome=S.over==='ROSC'?'恢復自發循環，團隊確認並交班'
     :S.rosc&&!S.roscKnown?'⚠ 生理上已恢復循環，但團隊全程沒有察覺':'未恢復循環';
@@ -1004,11 +1065,11 @@ function report(G){
   const pulseInCheck=S.checks.filter(x=>x.pulse).length;
   /* 中位數比平均值抗離群值，也是論文該報的統計量 */
   const med=a=>{if(!a.length)return '—';const b=a.slice().sort((x,y)=>x-y),n=b.length;
-    return (n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2).toFixed(1)+' 秒';};
+    return dur(n%2?b[(n-1)/2]:(b[n/2-1]+b[n/2])/2);};
   const ccf2=S.den2?Math.round(S.num2/S.den2*100):0;
   const called=S.checks.filter(x=>x.callAt!==null&&x.callAt!==undefined);
   const avgCallAt=called.length
-    ?(called.reduce((a,x)=>a+x.callAt,0)/called.length).toFixed(1)+' 秒':'—';
+    ?dur(called.reduce((a,x)=>a+x.callAt,0)/called.length):'—';
   const cprAfterAll=Math.round(S.cprAfterRoscTotal+S.cprAfterRosc);
   const ventRate=(S.tEtt!==null&&S.ventsAfterEtt)
     ?((S.t-S.tEtt)/S.ventsAfterEtt).toFixed(1)+' 秒/次':'—';
@@ -1025,7 +1086,7 @@ function report(G){
   ]});
   G2.push({g:'閉環溝通與領導',rows:[
     ['Leader',S.leaderName?S.leaderName+'（交接 '+S.handovers+' 次）':'全程沒有人宣告',S.leaderName?'':'no'],
-    ['沒有 Leader 的時間',Math.round(S.noLeaderT)+' 秒',S.noLeaderT>60?'no':'ok'],
+    ['沒有 Leader 的時間',dur(S.noLeaderT),S.noLeaderT>60?'no':'ok'],
     ['下達 Order',S.orders+' 次'],
     ['其中有指名對象',S.orderLog.filter(o=>o.to).length+(S.order&&S.order.to?1:0)+' 次'],
     ['被指名者複誦',S.ordersAck+' 次（'+pct(S.ordersAck,S.orders)+'）',
@@ -1044,11 +1105,16 @@ function report(G){
   ]});
   G2.push({g:'心律判讀',rows:[
     ['心律檢查',S.round+' 次'],
-    ['判讀宣告',right+' 正確 / '+wrong+' 錯誤 / '+none+' 未宣告',wrong||none?'no':(right?'ok':'')],
+    ['心律辨識',(()=>{const a=S.checks.filter(x=>x.id);const k2=a.filter(x=>x.idCorrect).length;
+      return k2+' 正確 / '+(a.length-k2)+' 錯誤 / '+(S.checks.length-a.length)+' 未辨識';})(),
+      S.checks.length&&S.checks.every(x=>x.idCorrect)?'ok':(S.checks.length?'no':'')],
+    ['認對卻決策錯',S.checks.filter(x=>x.idCorrect&&x.correct===false).length+' 次',
+      S.checks.some(x=>x.idCorrect&&x.correct===false)?'no':''],
+    ['處置決策',right+' 正確 / '+wrong+' 錯誤 / '+none+' 未宣告',wrong||none?'no':(right?'ok':'')],
     ['平均宣告時點',avgCallAt+'（停頓上限 '+K.CHECKMAX+' 秒）',
       called.length&&called.reduce((a,x)=>a+x.callAt,0)/called.length<=7?'ok':(called.length?'no':'')],
     ['檢查時同時摸脈搏',pulseInCheck+' / '+S.checks.length+' 次'],
-    ['最長未檢查間隔',Math.round(S.maxGap)+' 秒',S.maxGap>140?'no':'ok'],
+    ['最長未檢查間隔',dur(S.maxGap),S.maxGap>140?'no':'ok'],
     ['摸脈搏總次數',S.pulseChecks+' 次'],
     ['量 NIBP 次數',S.nibp.n+' 次']
   ]});
@@ -1058,18 +1124,18 @@ function report(G){
     ['CCF（自第一次壓胸起算）',ccf2+'%　基本門檻 60%、理想 80%',
       ccf2>=80?'ok':(ccf2>=60?'warn':'no')],
     ['CCF（全場含到場時間）',ccf+'%'],
-    ['開始後最長中斷',Math.round(S.maxPauseAfterStart)+' 秒',
+    ['開始後最長中斷',dur(S.maxPauseAfterStart),
       S.maxPauseAfterStart>K.CHECKMAX?'no':'ok'],
     ['壓胸換手',S.swaps+' 次',
       S.t>150?(S.swaps>=Math.floor(S.t/150)?'ok':'no'):''],
     ['壓胸者中途離開',S.cprMoved+' 次',S.cprMoved?'no':'ok'],
     ['為了其他處置停手',S.cprPaused+' 次',S.cprPaused>2?'no':''],
-    ['疲勞下仍未換手的壓胸',Math.round(S.fatiguedCprT)+' 秒',S.fatiguedCprT>60?'no':'ok'],
-    ['ROSC 後仍持續壓胸',cprAfterAll+' 秒',cprAfterAll>5?'no':''],
+    ['疲勞下仍未換手的壓胸',dur(S.fatiguedCprT),S.fatiguedCprT>60?'no':'ok'],
+    ['ROSC 後仍持續壓胸',dur(cprAfterAll),cprAfterAll>5?'no':''],
     ['壓胸導致再停止',S.rearrests+' 次',S.rearrests?'no':''],
     ['節律因灌流不足而惡化',S.decays+' 次',S.decays?'no':'ok'],
     ['因壓胸品質而延長的起效時間',
-      S.ccfPenFinal!==null?('+'+S.ccfPenFinal+' 秒'):(S.fixed?'+'+Math.round(S.ccfPen)+' 秒（尚未起效）':'—'),
+      S.ccfPenFinal!==null?('+'+dur(S.ccfPenFinal)):(S.fixed?'+'+dur(S.ccfPen)+'（尚未起效）':'—'),
       (S.ccfPenFinal||S.ccfPen)>20?'no':((S.ccfPenFinal!==null&&S.ccfPenFinal<=5)?'ok':'')]
   ]});
   G2.push({g:'氣道與通氣',rows:[
@@ -1080,7 +1146,7 @@ function report(G){
     ['時機錯誤的通氣',S.wrongVent+' 次'],
     ['過度通氣',S.overVent+' 次',S.overVent>2?'no':''],
     ['通氣總次數',S.vents+' 次（人工）'],
-    ['插管後無通氣時間',Math.round(S.noVentETT)+' 秒',S.noVentETT>30?'no':(S.tEtt!==null?'ok':'')],
+    ['插管後無通氣時間',dur(S.noVentETT),S.noVentETT>30?'no':(S.tEtt!==null?'ok':'')],
     ['插管後通氣頻率',ventRate+(S.tEtt!==null?'（目標 6 秒/次）':'')]
   ]});
   G2.push({g:'血管通路與用藥',rows:[
@@ -1108,6 +1174,10 @@ function report(G){
     ['對不可電擊節律放電',S.nonShock+' 次',S.nonShock?'no':'ok'],
     ['同步模式誤設',S.syncErr+' 次',S.syncErr?'no':'ok'],
     ['監測貼片',S.leads?'有貼上':'全程沒有貼',S.leads?'ok':'no']
+  ]});
+  G2.push({g:'紀錄',rows:[
+    ['紀錄筆數',S.recs.length+' 筆',S.recs.length>=4?'ok':(S.recs.length?'warn':'no')],
+    ['第一筆紀錄',S.recs.length?mm(S.recs[0].t):'全程沒有人做紀錄',S.recs.length?'':'no']
   ]});
   G2.push({g:'現場管理',rows:[
     ['家屬帶離現場',S.famOut!==null?mm(S.famOut):'全程留在床邊',S.famOut!==null?'ok':'no'],
@@ -1169,6 +1239,7 @@ function snapshotFor(G,cid){
     cpr:G.cpr, pauseVent:G.pauseVent, holdCpr:G.holdCpr, cnt:G.cnt, needPause:G.needPause,
     breaths:G.breaths, noVentT:r1(G.noVentT), coach:r1(G.coach), ventT:r1(G.ventT),
     check:r1(G.check), round:G.round, sinceCheck:r1(G.sinceCheck), timeShown:r1(G.timeShown),
+    check_id:G.checkRec?(G.checkRec.id||null):null,
     checkRec:G.checkRec?{pulse:G.checkRec.pulse,call:G.checkRec.call}:null,
     clearAt:r1(G.clearAt), shocks:G.shocks,
     df:{j:G.df.j,sync:G.df.sync,charged:G.df.charged,chargeT:r1(G.df.chargeT),holder:G.df.holder},
@@ -1179,6 +1250,8 @@ function snapshotFor(G,cid){
     order:G.order?{txt:G.order.txt,by:G.order.by,at:r1(G.order.at),to:G.order.to,
                    ack:G.order.ack,done:G.order.done}:null,
     train:G.train, drill:G.train?G.drill:null, drillDone:G.drillDone,
+    recs:G.recs,
+    ventAt:(G.ventAt||[]).map(r1),
     tray:G.tray, family:{x:r1(G.family.x),y:r1(G.family.y),line:G.family.line,gone:G.family.gone},
     feed:G.feed, nTalk:G.talk.length,
     cause:G.over?{id:G.cause.id,n:G.cause.n,fixLabel:G.cause.fixLabel,delay:G.cause.delay}

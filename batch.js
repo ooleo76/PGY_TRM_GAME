@@ -80,7 +80,8 @@ function run(seed,cause,rhythm,opt){
     if(G.over||G.rosc)break;
     st('b','foot'); act('b','rhythmCheck'); wait(2);
     const shockable=A.RH(G.rhythm).shock;
-    act('b','callRhythm',{v:shockable?'shock':'noshock'});
+    act('b','callRhythm',{r:{VF:'VF',pVT:'VT',PEA:'PEA',asystole:'ASYS',sinus:'PEA'}[G.rhythm]});
+    act('b','callDecision',{v:shockable?'shock':'noshock'});
     until(()=>G.check<=0,12);
     if(shockable){
       st('d','bedR');
@@ -147,7 +148,7 @@ function run(seed,cause,rhythm,opt){
   /* 撐到起效 */
   until(()=>G.rosc,180);
   if(G.rosc){st('b','foot');act('b','rhythmCheck');wait(2);
-    act('b','callRhythm',{v:'noshock'});until(()=>G.check<=0,10);
+    act('b','callRhythm',{r:'PEA'});act('b','callDecision',{v:'noshock'});until(()=>G.check<=0,10);
     const cm=cprMan;st(cm,'bedL');act(cm,'checkPulse');until(()=>!P(cm).busy,10);
     act(cm,'ready',{txt:'我摸到脈搏了！'});wait(2);act('b','endCase');}
   else if(!G.over)A.applyAct(G,null,'__stop');
