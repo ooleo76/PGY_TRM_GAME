@@ -9,13 +9,21 @@ services:
       - key: ROOM
         value: "2468"                  # 固定房間代碼，之後可在 Render 後台改
       - key: TKEY
-        value: "emed2026"              # 教師金鑰，請改成你自己的
+        sync: false                    # 教師金鑰，在 Render 後台填，不要進 Git
+      - key: ANON
+        value: "1"                     # 正式收資料一定要開：錄影檔只留代號與人事號雜湊
+      - key: ANON_SALT
+        sync: false                    # 匿名雜湊用的鹽，固定住才能跨場次比對同一個人
 
       # ── 課後自動把錄影檔寄到信箱 ──
       - key: MAIL_TO
-        value: "ooleo76@gmail.com"
+        value: "A408J6@chimei.org.tw"   # 院內信箱：研究資料不要寄到個人商業信箱
       - key: MAIL_USER
-        value: "ooleo76@gmail.com"     # 寄件帳號，通常跟收件同一個
+        sync: false                     # 寄件帳號（院內 SMTP 帳號），在 Render 後台填
+      - key: MAIL_HOST
+        sync: false                     # 院內 SMTP 主機，例如 smtp.chimei.org.tw
+      - key: MAIL_PORT
+        sync: false                     # 465（SSL）或 587（STARTTLS，本工具目前只支援 465）
       - key: MAIL_PASS
         sync: false                    # ★ 應用程式密碼絕對不要寫進這個檔案。
                                        #   sync:false 會讓 Render 在後台問你，值只存在 Render 那邊。

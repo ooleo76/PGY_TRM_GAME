@@ -13,6 +13,20 @@ const PORT=Number(process.env.PORT||8080);
 /* 放到公開網路上時，用房間代碼擋住路人；不指定就每次隨機產生 */
 const ROOM=String(process.env.ROOM||Math.floor(1000+Math.random()*9000));
 const TKEY=String(process.env.TKEY||Math.random().toString(36).slice(2,8));
+/* ══ v4.0 資訊安全（DP-1 / item 16）══
+   ROOM 是固定的四位數，寫在投影幕上 —— 它只是擋路人，不是門禁。
+   真正的門禁是 JOIN：每一場上課換一組，舊的 QR code 螢幕截圖就失效。
+   教師控制台可以隨時「換一組入場代碼」與「鎖定入場」。 */
+const newJoin=()=>crypto.randomBytes(4).toString('hex');
+let JOIN=newJoin();
+let JOINLOCK=false;
+/* 匿名模式：設 ANON=1 之後，錄影檔與報表一律只留 P1…P6 與人事號的雜湊，
+   不留姓名字。正式收資料（送過 IRB）請一定要打開。 */
+const ANON=String(process.env.ANON||'')==='1';
+const ANONSALT=String(process.env.ANON_SALT||crypto.randomBytes(16).toString('hex'));
+const anonId=eid=>eid?crypto.createHmac('sha256',ANONSALT).update(String(eid)).digest('hex').slice(0,12):null;
+/* 同一批人一天跑好幾場 —— 分析時要分得出來這是第幾場（PA-7） */
+let SESSION_INDEX=0;
 const USE_TUNNEL=process.argv.includes('--tunnel');
 const ROOT=__dirname;
 const RECDIR=path.join(ROOT,'recordings');
@@ -24,8 +38,17 @@ const MIME={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=u
   '.svg':'image/svg+xml','.png':'image/png','.txt':'text/plain; charset=utf-8'};
 function serve(req,res){
   let u=decodeURIComponent(req.url.split('?')[0]);
+  const qs=new URLSearchParams(req.url.split('?')[1]||'');
   if(u==='/')u='/ihca-client.html';
   if(u==='/favicon.ico'){res.writeHead(204);return res.end();}
+  /* DP-1：錄影檔含學員的操作紀錄與代號。WebSocket 有房間代碼與教師金鑰，
+     但 v3.4 的靜態伺服器完全沒有驗證 —— 部署到公開網址之後，
+     任何知道網址的人都可以 GET /recordings 列出並下載全部檔案。 */
+  if(u==='/recordings'||u.indexOf('/recordings/')===0){
+    if(qs.get('k')!==TKEY){
+      res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'});
+      return res.end('需要教師金鑰才能存取錄影檔');}
+  }
   if(u==='/recordings'||u==='/recordings/'){
     let list=[];try{list=fs.readdirSync(RECDIR).filter(f=>f.endsWith('.json')).sort().reverse();}catch(e){}
     res.writeHead(200,{'Content-Type':MIME['.json']});return res.end(JSON.stringify(list));
@@ -125,27 +148,37 @@ function mailOut(kind,name,json,summary){
 }
 
 function record(cid,act,p){R.events.push({k:R.G.tick,c:cid,a:act,p:p||null});}
+/* 錄影檔裡的名冊。ANON=1 時只留代號與人事號的不可逆雜湊（IRB 要求）。 */
+function roster(){
+  const out=[];
+  for(const id of SIM.K.SLOTS.slice(0,R.setup.n).map(x=>x.id)){
+    const sl=R.slots[id];if(!sl)continue;
+    out.push(ANON
+      ?{slot:id,code:'P'+(SIM.K.SLOTS.findIndex(z=>z.id===id)+1),
+        pid:anonId(sl.eid),pgy:sl.pgy||null}
+      :{slot:id,name:sl.name,eid:sl.eid||null,pgy:sl.pgy||null});}
+  return out;}
 
 /* 熟悉環境結束時單獨存一份檔。
    它不是演練錄影（沒有教案、不能重播），而是「定向階段」的完成紀錄 ——
    每個人各項核心互動的完成秒數，之後可以當共變量。 */
 function saveFamiliarization(){
   const G=R.G;
-  const roster=G.ch.filter(c=>c.active).map(c=>({slot:c.id,name:c.n}));
+  const rost=roster().length?roster():G.ch.filter(c=>c.active).map(c=>({slot:c.id,name:c.n}));
   const per={};
-  for(const r of roster){
+  for(const r of rost){
     const d=(G.drill||{})[r.slot]||{};
-    per[r.slot]={name:r.name,
+    per[r.slot]={name:r.name||r.code,pgy:r.pgy||null,pid:r.pid||null,
       items:SIM.K.DRILL.map(it=>({k:it.k,n:it.n,at:d[it.k]!==undefined?d[it.k]:null})),
       complete:SIM.K.DRILL.every(it=>d[it.k]!==undefined),
       lastAt:SIM.K.DRILL.reduce((a,it)=>d[it.k]!==undefined?Math.max(a,d[it.k]):a,0)};
   }
-  const rec={kind:'familiarization', v:1, engine:SIM.ENGINE,
+  const rec={kind:'familiarization', v:2, engine:SIM.ENGINE, anon:ANON, wallAt:Date.now(),
     room:ROOM, seed:R.seed, n:R.setup.n,
     startedAt:R.startedAt||null, endedAt:new Date().toISOString(),
     dur:Math.round(G.t),
     allDoneAt:G.drillDone,          /* 全員完成的秒數；沒完成就是 null */
-    roster, per};
+    roster:rost, per};
   try{
     const d=new Date(), z=x=>String(x).padStart(2,'0');
     const name='familiarization-'+d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())
@@ -174,8 +207,14 @@ function saveRecording(){
   const d=new Date(),z=n=>String(n).padStart(2,'0');
   const name=d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'-'+z(d.getHours())+z(d.getMinutes())
     +'_'+(R.G.cause?R.G.cause.id:'x')+'.json';
-  const rec={v:4,engine:SIM.ENGINE,seed:R.seed,setup:R.setup,events:R.events,
+  const rec={v:5,engine:SIM.ENGINE,seed:R.seed,setup:R.setup,events:R.events,
     familiarization:R.lastDrill||null,
+    /* PA-7：同一批人一天跑好幾場時，分析要分得出來這是第幾場、
+       以及距離熟悉環境過了多久 */
+    sessionIndex:++SESSION_INDEX,
+    familiarizationAge:(R.lastDrill&&R.lastDrill.wallAt)
+      ?Math.round((Date.now()-R.lastDrill.wallAt)/1000):null,
+    anon:ANON, roster:roster(), room:ROOM,
     endedAt:d.toISOString(),cause:R.G.cause.n,over:R.G.over,dur:Math.round(R.G.t)};
   try{
     const json=JSON.stringify(rec);
@@ -202,14 +241,23 @@ function lobbyInfo(){
     drillDone:R.training?R.G.drillDone:null, lastDrill:R.lastDrill||null,
     slots:SIM.K.SLOTS.slice(0,R.setup.n).map(s=>({id:s.id,c:s.c,coat:!!s.coat,
       name:R.slots[s.id]?R.slots[s.id].name:null,
+      pgy:R.slots[s.id]?(R.slots[s.id].pgy||null):null,
+      hasEid:!!(R.slots[s.id]&&R.slots[s.id].eid),
       online:!!(R.slots[s.id]&&R.slots[s.id].ws)})),
+    join:JOIN, joinLock:JOINLOCK, anon:ANON, sessionIndex:SESSION_INDEX,
     saved:R.savedAs, mail:MAIL.enabled()?MAIL.TO:null};
 }
 function onOpen(ws){ send(ws,{t:'hi',need:'hello'}); }
 function authed(ws,m){
   const r=m.role||'player';
   if(r==='teacher'||r==='host')return String(m.key||'')===TKEY;
-  return String(m.room||'')===ROOM;
+  if(String(m.room||'')!==ROOM)return 'room';
+  if(String(m.join||'')!==JOIN)return 'join';
+  /* 鎖定之後只讓已經佔到位子的人重新連線（斷線重連不受影響） */
+  if(JOINLOCK&&r==='player'){
+    const known=Object.keys(R.slots).some(k=>R.slots[k]&&R.slots[k].eid&&R.slots[k].eid===String(m.eid||''));
+    if(!known)return 'locked';}
+  return true;
 }
 function onClose(ws){
   if(!R)return;
@@ -228,7 +276,9 @@ function pushLobby(){const L=lobbyInfo();broadcast(()=>L);}
 function onMsg(ws,m){
   if(!R)newRound();
   if(m.t==='hello'){
-    if(!authed(ws,m)){send(ws,{t:'denied',need:(m.role==='teacher'||m.role==='host')?'key':'room'});return;}
+    const au=authed(ws,m);
+    if(au!==true){send(ws,{t:'denied',
+      need:(m.role==='teacher'||m.role==='host')?'key':(au===true?'room':au)});return;}
     ws.meta.role=m.role||'player';
     /* role 'lobby' = 手機已連上但還沒填名字，不佔位子 */
     if(ws.meta.role==='player'){
@@ -249,11 +299,15 @@ function onMsg(ws,m){
         id=open.find(s=>!R.slots[s]||!R.slots[s].ws);
       if(!id){send(ws,{t:'full'});return;}
       const nm=(m.name||'').trim().slice(0,2)||id.toUpperCase();
-      R.slots[id]={name:nm,ws};
-      ws.meta.slot=id;
+      /* item 15：人事號用來跨場次比對同一個人；年資是分析一定要的共變量。
+         畫面上永遠只出現那一個字，人事號不會顯示給任何人看。 */
+      const eid=String(m.eid||'').trim().slice(0,20);
+      const pgy=String(m.pgy||'').trim().slice(0,12);
+      R.slots[id]={name:nm,eid,pgy,ws};
+      ws.meta.slot=id;ws.meta.eid=eid;
       const c=R.G.ch.find(x=>x.id===id);
-      if(c){c.n=nm;c.online=true;}
-      R.setup.names[id]=nm;
+      if(c){c.n=ANON?('P'+(SIM.K.SLOTS.findIndex(z=>z.id===id)+1)):nm;c.online=true;}
+      R.setup.names[id]=c?c.n:nm;
     }
     send(ws,{t:'welcome',role:ws.meta.role,slot:ws.meta.slot||null,
       room:ROOM,key:(ws.meta.role==='teacher'||ws.meta.role==='host')?TKEY:null,
@@ -299,6 +353,10 @@ function onMsg(ws,m){
     const st=Object.assign({},R.setup); delete st.train;
     newRound(st); R.lastDrill=drill; R.training=false; R.started=false;
     pushLobby(); broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
+  /* item 16：換一組入場代碼 —— 舊的 QR 螢幕截圖立刻失效 */
+  if(m.t==='newjoin'){ JOIN=newJoin(); pushLobby();
+    send(ws,{t:'log',e:[{m:'已換一組入場代碼，請重新投影 QR code',p:0}]}); return;}
+  if(m.t==='joinlock'){ JOINLOCK=!!m.on; pushLobby(); return;}
   if(m.t==='pause'){ doAct(null,'__pause',{on:!!m.on}); pushLobby(); return;}
   if(m.t==='speed'){ R.speed=Math.max(1,Math.min(3,Number(m.v)||1)); pushLobby(); return;}
   if(m.t==='stop'){ if(!R.G.over){doAct(null,'__stop');saveRecording();} pushLobby(); return;}
@@ -370,19 +428,20 @@ function banner(pub,noHint){
   console.log('  ║   IHCA 團隊復甦 — 多人版伺服器                         ║');
   console.log('  ╚════════════════════════════════════════════════════════╝');
   console.log('');
-  console.log('  房間代碼：' + ROOM + '　（學員掃 QR 就會自動帶入）');
+  console.log('  房間代碼：' + ROOM + '　入場代碼：' + JOIN + '　（學員掃 QR 就會自動帶入）');
+  console.log('  ' + (ANON?'匿名模式：開（錄影檔只留代號與人事號雜湊）':'匿名模式：關（正式收資料請設 ANON=1）'));
   console.log('');
   console.log('  ▸ 主機投影畫面  ' + base + '/?m=host&k=' + TKEY);
   console.log('  ▸ 教師控制台    ' + base + '/?m=teacher&k=' + TKEY);
-  console.log('  ▸ 學員（QR）    ' + base + '/?r=' + ROOM);
-  console.log('  ▸ 重播播放器    ' + base + '/?m=replay');
+  console.log('  ▸ 學員（QR）    ' + base + '/?r=' + ROOM + '&j=' + JOIN);
+  console.log('  ▸ 重播播放器    ' + base + '/?m=replay&k=' + TKEY);
   console.log('');
   if(pub){
     console.log('  這是公開網址，學員的手機用院內 WiFi（或 4G）都連得到，');
     console.log('  不需要跟這台電腦在同一個網路。關掉視窗網址就失效。');
   }else if(list.length){
     console.log('  同一個 WiFi 的手機可以改用：');
-    for(const ip of list)console.log('      http://'+ip+':'+PORT+'/?r='+ROOM);
+    for(const ip of list)console.log('      http://'+ip+':'+PORT+'/?r='+ROOM+'&j='+JOIN);
     console.log('');
     if(!noHint){
       console.log('  如果電腦跟手機不在同一個網路（例如電腦接網路線、手機用院內 WiFi），');

@@ -24,6 +24,8 @@ button.go{background:#1B5E45;border-color:#2E8A67}
 button.warn{background:#8A6417;border-color:#C09A2E;color:#fff}
 button.lead{background:#6B4C0E;border-color:#D6AC3A;color:#fff}
 button.talk{background:#173845;border-color:#2F6C82}
+/* item 8：管路確認用淺綠色框，跟一般處置區隔開來 */
+button.confirm{background:#16302A;border-color:#7FE0A8;color:#DDF6E9}
 button.wide{grid-column:1 / -1}
 button.ghost{font-size:12px;padding:8px 10px;min-height:42px;background:#161F27}
 
@@ -45,31 +47,59 @@ body.mode-host #alm{width:96px;font-size:19px}
 body.mode-host #alm .sub{font-size:12px}
 
 /* ── 場地 ── */
-#field{flex:1;position:relative;min-height:0;background:#0D1319}
-#cv{position:absolute;inset:0;width:100%;height:100%}
+#field{flex:1;position:relative;min-height:0;background:#0D1319;--feedw:clamp(112px,30%,250px)}
+body.mode-host #field,body.mode-replay #field{--feedw:clamp(240px,30%,460px)}
+/* item 2 / item 5：對話、order、系統訊息一律走右側同一條流，而且不覆蓋病房畫面 ——
+   畫布本身讓出右邊那一欄，所以床右、電擊器、家屬永遠看得到。 */
+/* canvas 是 replaced element：width:auto 會用內建的 300x150，不會跟著 left/right 拉開，
+   所以寬度要自己算出來。 */
+#cv{position:absolute;left:0;top:0;width:calc(100% - var(--feedw));height:100%}
 #hud{position:absolute;left:9px;top:6px;font-family:var(--mono);pointer-events:none;z-index:3}
 #hud .t{font-size:21px;font-weight:500;color:#EAF2F8;line-height:1;text-shadow:0 2px 8px #000}
 #hud .s{font-size:10px;color:#9FB2C2;margin-top:3px;text-shadow:0 1px 4px #000}
 body.mode-host #hud .t{font-size:30px}body.mode-host #hud .s{font-size:13px}
-#ord{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:6;
- background:rgba(150,118,30,.97);color:#fff;padding:9px 13px;border-radius:11px;
- display:none;align-items:center;gap:10px;max-width:92%;box-shadow:0 5px 18px rgba(0,0,0,.45)}
-#ord.on{display:flex}
-#ord .x{flex:1;font-size:15px;font-weight:700;line-height:1.35}
-body.mode-host #ord .x{font-size:26px}
-#ord button{flex:0 0 auto;min-width:0;min-height:0;font-size:12px;padding:8px 12px;
- background:#12301F;border-color:#2E8A67;border-radius:8px}
-#feed{position:absolute;right:6px;top:54px;bottom:8px;width:40%;max-width:230px;z-index:4;
- display:flex;flex-direction:column;gap:5px;pointer-events:none;overflow:hidden;justify-content:flex-end}
-body.mode-host #feed{max-width:400px;width:31%}
-#feed .f{background:rgba(10,18,26,.86);border-left:3px solid #3FD0E8;border-radius:7px;
- padding:5px 8px;font-size:12px;line-height:1.4;color:#D6E2EC}
-body.mode-host #feed .f{font-size:23px;padding:11px 15px;line-height:1.45}
+/* item 9：任何人回報／下令之後，其他人的病房畫面下方會出現「收到」，
+   三秒內沒點就自己消失。點了會記一筆到報表。 */
+#roger{position:absolute;left:8px;right:calc(var(--feedw) + 8px);bottom:8px;z-index:7;
+ background:rgba(14,26,34,.96);border:1px solid #2F6C82;border-radius:11px;
+ padding:8px 10px;display:none;align-items:center;gap:10px;
+ box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#roger.on{display:flex}
+#roger .x{flex:1;font-size:13px;line-height:1.35;color:#D6E2EC;
+ overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#roger .x b{margin-right:6px;font-weight:700}
+#roger button{flex:0 0 auto;min-width:74px;min-height:40px;font-size:13px;padding:8px 12px;
+ background:#1B5E45;border-color:#2E8A67;border-radius:9px}
+#roger .bar{position:absolute;left:0;bottom:0;height:2px;background:#3FD0E8;border-radius:0 0 11px 11px}
+body.mode-host #roger,body.mode-teacher #roger,body.mode-replay #roger{display:none!important}
+#feed{position:absolute;right:0;top:0;bottom:0;width:var(--feedw);z-index:4;
+ display:flex;flex-direction:column;gap:4px;overflow-y:auto;justify-content:flex-start;
+ padding:6px 6px 6px 5px;background:#0A1016;border-left:1px solid var(--line);
+ -webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
+#feed .f{background:rgba(18,30,40,.92);border-left:3px solid #3FD0E8;border-radius:6px;
+ padding:5px 7px;font-size:12px;line-height:1.42;color:#D6E2EC;flex:none;word-break:break-word}
+body.mode-host #feed .f{font-size:20px;padding:9px 12px;line-height:1.45}
+/* kind 只決定色條 —— 不代表輕重，字級一律相同（item 2） */
+#feed .f.order{border-left-color:#E8B84B}
+#feed .f.ack{border-left-color:#7FE0A8}
+#feed .f.clue{border-left-color:#8FE3F5}
+#feed .f.concern{border-left-color:#FF8A93}
+#feed .f.sys{border-left-color:#9B86EE}
+#feed .cap{font-size:10px;letter-spacing:.14em;color:#5F7183;padding:2px 2px 4px;flex:none;
+ position:sticky;top:-6px;background:#0A1016;z-index:1}
+body.mode-host #feed .cap{font-size:14px}
+/* 病房畫面想看大一點的時候可以把這一欄收起來（只有學員端，投影幕不收） */
+#feedtog{position:absolute;right:0;top:0;z-index:6;min-width:0;min-height:0;
+ font-size:11px;padding:4px 7px;border-radius:0 0 0 8px;background:rgba(10,16,22,.9);
+ border:1px solid var(--line);border-top:none;border-right:none;color:#8296A8}
+body.mode-host #feedtog,body.mode-teacher #feedtog,body.mode-replay #feedtog{display:none}
+body.feed-off #field{--feedw:0px!important}
+body.feed-off #feed{display:none}
 /* ── 紀錄表（只在投影幕左側）──
    內容全部是「已經發生過的事」，所以全隊都看得到也不會洩漏現在幾分幾秒。 */
 #recbox{display:none}
 body.mode-host #recbox{display:block;position:absolute;left:8px;top:54px;bottom:8px;
-  width:31%;max-width:430px;z-index:4;pointer-events:none;overflow:hidden}
+  width:30%;max-width:430px;z-index:4;pointer-events:none;overflow:hidden}
 #recbox table{width:100%;border-collapse:collapse;background:rgba(10,18,26,.88);
   border-radius:9px;overflow:hidden;font-size:16px}
 #recbox th{background:rgba(63,208,232,.16);color:#8FE3F5;font-weight:600;
@@ -81,27 +111,12 @@ body.mode-host #recbox{display:block;position:absolute;left:8px;top:54px;bottom:
 #recbox .cap{color:#8296A8;font-size:14px;padding:4px 2px 6px}
 #feed .f.new{animation:slideIn .3s ease-out}
 #feed .f b{font-weight:700;margin-right:5px}
-#feed .f.big{background:rgba(22,80,100,.93);font-size:13px;border-left-color:#8FE3F5}
-body.mode-host #feed .f.big{font-size:27px}
 @keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
-/* ── 直立手機的訊息列 ──
-   桌機／橫向時 #field 被 44vh 限高，畫布左右留黑邊，訊息疊在黑邊上不礙事。
-   直立手機的 #field 剛好等於病房比例、沒有黑邊，40% 寬的訊息會直接蓋掉
-   床右、電擊器與家屬那一側 —— 所以改成放在病房畫面下方，完全不重疊。 */
-#feedp{display:none}
-@media (max-width:640px){
-  body.mode-player #feed{display:none}
-  body.mode-player #toast{top:4px;bottom:auto;font-size:12.5px;max-width:94%}
-  body.mode-player #feedp{display:flex;flex:none;flex-direction:column;
-    gap:4px;padding:5px 7px;background:#0B1219;border-top:1px solid var(--line)}
-  body.mode-player #feedp:empty{display:none}
-  #feedp .f{background:rgba(18,30,40,.92);border-left:3px solid #3FD0E8;border-radius:7px;
-    padding:4px 8px;font-size:12px;line-height:1.35;color:#D6E2EC;flex:none;
-    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
-    -webkit-line-clamp:2;-webkit-box-orient:vertical}
-  #feedp .f b{font-weight:700;margin-right:5px}
-  #feedp .f.big{background:rgba(22,80,100,.93);border-left-color:#8FE3F5;font-weight:600}
-  #feedp .f.new{animation:slideUp .3s ease-out}
+/* 窄螢幕：訊息流那一欄壓窄一點，字級也跟著縮，但位置不變 —— 學員不用學兩套版面 */
+@media (max-width:480px){
+  body.mode-player #field{--feedw:clamp(96px,32%,150px)}
+  #feed .f{font-size:10.5px;padding:4px 5px;line-height:1.35}
+  #feed .cap{font-size:9px}
 }
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .tb{position:absolute;top:6px;font-size:11px;padding:7px 9px;min-height:0;min-width:0;
@@ -142,6 +157,19 @@ body.mode-host #strip .sl b{font-size:22px}
 #strip .sl .cd{color:var(--gold)}
 #cStrip{width:100%;height:104px;display:block}
 body.mode-host #cStrip{height:190px}
+/* item 8：接上 EtCO₂ 之後自己看波形 —— 呈現方式跟心律判讀一致，學員不用學兩套 */
+#tube{position:absolute;left:8px;right:calc(var(--feedw) + 8px);top:44px;z-index:8;display:none;
+ background:rgba(4,10,14,.96);border:1px solid #6B5A2E;border-radius:12px;padding:8px 10px 6px;
+ box-shadow:0 8px 30px rgba(0,0,0,.6)}
+#tube.on{display:block}
+#tube .sl{display:flex;justify-content:space-between;align-items:baseline;
+ font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:3px}
+#tube .sl b{color:#F5C542;font-size:13px;letter-spacing:.05em}
+body.mode-host #tube .sl b{font-size:22px}
+#cTube{width:100%;height:96px;display:block}
+body.mode-host #cTube{height:170px}
+#tube .sn{font-size:11px;color:#9AA9B4;margin-top:3px;line-height:1.5}
+body.mode-host #tube .sn{font-size:16px}
 #strip .sn{font-size:11px;color:#7C8F9F;margin-top:3px;line-height:1.5}
 body.mode-host #strip .sn{font-size:16px}
 
@@ -242,6 +270,11 @@ body.mode-host #who .w .b{font-size:14px}
 #sheet .sub{margin:0 0 16px;color:var(--dim);font-size:13px;text-align:center}
 #sheet h4{font-size:11px;letter-spacing:.14em;color:var(--cy);margin:22px 0 6px;font-weight:500;
  border-bottom:1px solid #1B2A33;padding-bottom:5px}
+#sheet h4.top{color:#FFCF6B;font-size:13px;letter-spacing:.1em;border-bottom-color:#4A3C18;margin-top:6px}
+.row.big{padding:11px 0;font-size:15px}
+.row.big span:first-child{color:#EAF2F8;font-weight:600}
+.row.big span:last-child{color:#FFC9C9;font-family:var(--sans);text-align:right}
+.row.big.ok span:last-child{color:#6FE0A6}
 .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #16202A;font-size:13.5px;gap:14px}
 .row span:first-child{color:var(--dim)}
 .row span:last-child{font-family:var(--mono);color:#EAF2F8;text-align:right;white-space:pre-line}
@@ -280,9 +313,35 @@ body.mode-replay #rp{display:block}
 
 body.mode-player #who{display:none}
 body.mode-host #hud{display:none}   /* 投影幕不顯示急救經過時間 —— 那是紀錄者的資訊 */
-body.mode-player #field{flex:0 0 auto;aspect-ratio:900/780;max-height:44vh}
-body.mode-player #toast{top:auto;bottom:8px}
+/* 直立手機：病房畫面高度跟著「畫布實際寬度」走（已經扣掉右邊訊息欄），
+   所以病房不會被壓扁，訊息也不會蓋到床右。 */
+body.mode-player #field{flex:0 0 auto;
+  height:min(46vh, calc((100vw - clamp(112px,30vw,250px)) * 0.867))}
+@media (max-width:480px){
+  body.mode-player #field{height:min(46vh, calc((100vw - clamp(96px,32vw,150px)) * 0.867))}
+}
+body.mode-player #toast{top:auto;bottom:56px}
 body.mode-player #panel{flex:1;height:auto;min-height:0}
+/* item 5：橫向手機與 iPad —— 左邊病房、右邊操作面板，不再把面板擠成一條。 */
+@media (min-width:760px) and (orientation:landscape){
+  body.mode-player #app{display:grid;
+    grid-template-columns:minmax(0,1fr) clamp(300px,34vw,420px);
+    grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:"mon panel" "field panel";height:100dvh}
+  body.mode-player #mon{grid-area:mon}
+  body.mode-player #field{grid-area:field;height:auto;min-height:0;flex:1 1 auto;
+    --feedw:clamp(150px,26%,280px)}
+  body.mode-player #panel{grid-area:panel;height:auto;min-height:0;
+    border-top:none;border-left:1px solid var(--line);overflow-y:auto}
+  body.mode-player #acts{grid-template-columns:1fr 1fr}
+  body.mode-player #toast{bottom:60px}
+}
+/* iPad 直立：畫面夠大，病房給多一點高度 */
+@media (min-width:700px) and (orientation:portrait){
+  body.mode-player #field{height:min(52vh, calc((100vw - clamp(150px,26vw,300px)) * 0.867));
+    --feedw:clamp(150px,26%,300px)}
+  body.mode-player #acts{grid-template-columns:1fr 1fr 1fr}
+}
 body.mode-host #panel,body.mode-host #stick,body.mode-host .tb{display:none}
 body.mode-teacher #panel,body.mode-teacher #who{display:none}
 body.mode-replay #panel{display:none}
@@ -298,8 +357,9 @@ body.mode-replay #panel{display:none}
  </div>
  <div id="field">
   <canvas id="cv"></canvas>
-  <div id="ord"><span class="x" id="ordx"></span><button id="ordb">收到</button></div>
   <div id="feed"></div>
+  <button id="feedtog" title="收合／展開訊息欄">▶</button>
+  <div id="roger"><span class="x" id="rogx"></span><button id="rogb">收到</button><i class="bar" id="rogbar"></i></div>
   <div id="hud"><div class="t" id="clk">‑‑:‑‑</div><div class="s" id="sub"></div></div>
   <button class="tb" id="pausebtn">⏸ 暫停</button>
   <button class="tb" id="spd">速度 1×</button>
@@ -311,9 +371,13 @@ body.mode-replay #panel{display:none}
     <canvas id="cStrip"></canvas>
     <div class="sn" id="stripN"></div>
   </div>
+  <div id="tube">
+    <div class="sl"><b>管路確認 · EtCO₂ 波形</b><span class="cd" id="tubeC"></span></div>
+    <canvas id="cTube"></canvas>
+    <div class="sn" id="tubeN"></div>
+  </div>
  </div>
  <div id="recbox"></div>
- <div id="feedp"></div>
  <div id="who"></div>
  <div id="panel"><div id="youare"></div><div id="acts"></div></div>
  <div id="rp">
@@ -356,9 +420,17 @@ const _confirm={};
 let ettScope='Direct', ettBlade='3 號';
 let SOLO=(MODE==='solo'), REPLAY=(MODE==='replay');
 let ROOM=QS.get('r')||localStorage.getItem('ihcaRoom')||'';
+let JOIN=QS.get('j')||localStorage.getItem('ihcaJoin')||'';
+if(QS.get('j'))localStorage.setItem('ihcaJoin',QS.get('j'));
 let TKEY=QS.get('k')||'';
+/* item 15：人事號用來跨場次比對同一個人（不會顯示在任何畫面上）；
+   年資是分析一定要放的共變量。兩個都存在這支手機上，之後不用重打。 */
+let gateEid=localStorage.getItem('ihcaEid')||'';
+let gatePgy=localStorage.getItem('ihcaPgy')||'';
+const PGYOPT=['UGY','PGY1','PGY2','R1','R2','R3 以上','護理師','其他'];
 let DENIED=null;
-const studentURL=()=>location.origin+location.pathname.replace(/[^/]*$/,'')+'?r='+ROOM;
+const studentURL=()=>location.origin+location.pathname.replace(/[^/]*$/,'')
+  +'?r='+ROOM+(LOBBY&&LOBBY.join?'&j='+LOBBY.join:'');
 function qrSVG(text,px){try{return QR.svg(text,px||6,'#0A0F14','#FFFFFF');}
   catch(e){return '<div style="color:#FF8A93">QR 產生失敗</div>';}}
 
@@ -377,14 +449,16 @@ const NET={ws:null,ok:false,queue:[],
     if(MODE==='host'||MODE==='teacher'){NET.send({t:'hello',role:MODE,key:TKEY});return;}
     if(!ROOM){DENIED='room';paintGate();return;}
     const nm=localStorage.getItem('ihcaName')||'';
-    if(!nm){NET.send({t:'hello',role:'lobby',room:ROOM});return;}  /* 還沒填名字＝先不要佔位子 */
-    NET.send({t:'hello',role:'player',name:nm,slot:localStorage.getItem('ihcaSlot')||'',room:ROOM});
+    if(!nm||!gateEid){NET.send({t:'hello',role:'lobby',room:ROOM,join:JOIN});return;}
+    NET.send({t:'hello',role:'player',name:nm,slot:localStorage.getItem('ihcaSlot')||'',
+      room:ROOM,join:JOIN,eid:gateEid,pgy:gatePgy});
   },
   send(o){if(NET.ws&&NET.ws.readyState===1)NET.ws.send(JSON.stringify(o));},
   act(a,p){if(SOLO||REPLAY){soloAct(a,p);return;}NET.send({t:'act',act:a,p:p||{}});},
   recv(m){
     if(m.t==='welcome'){ME=m.slot;DENIED=null;PRED.init=0;PRED.vx=PRED.vy=0;_lastGate='';
       if(m.room){ROOM=m.room;localStorage.setItem('ihcaRoom',m.room);}
+      if(m.join){JOIN=m.join;localStorage.setItem('ihcaJoin',m.join);}
       if(m.key)TKEY=m.key;
       if(ME)localStorage.setItem('ihcaSlot',ME);}
     else if(m.t==='denied'){DENIED=m.need;ME=null;_lastGate='';paintGate();}
@@ -404,7 +478,7 @@ let LOCAL=null, REC=null;
 function soloNew(setup){
   const seed=(Math.random()*0xFFFFFFFF)>>>0;
   LOCAL=IHCA.newState(seed,setup||{});
-  REC={v:3,seed,setup:setup||{},events:[]};
+  REC={v:5,engine:IHCA.ENGINE,seed,setup:setup||{},events:[]};
   G=LOCAL;ME=ME||'a';
 }
 function soloAct(a,p){
@@ -537,12 +611,15 @@ function drawWard(cx,cv,meId){
       cx.moveTo(px+15,py-76);cx.quadraticCurveTo(px+6,py-40,BEDC.cx+28,BEDC.cy+34);cx.stroke();
       plate(px+40,py-128,G.ivRoute||'IV','rgba(30,110,140,.94)','#fff',11);}}
 
-  if(G.air!=='BVM'){const ok=G.air==='ETT',ty=BEDC.cy-BEDC.h/2+44;
-    cx.strokeStyle=ok?'#2FB6D8':'#E0555F';cx.lineWidth=8;cx.lineCap='round';
+  /* item 8：管子在不在是看得到的，位置對不對不是 —— 畫面不再幫學員判斷。
+     一律畫成同一根管子、同一個顏色；要知道對不對，去接 EtCO₂。 */
+  if(G.air!=='BVM'){const ty=BEDC.cy-BEDC.h/2+44;
+    const confirmed=(G.airCalled==='ok');
+    cx.strokeStyle='#2FB6D8';cx.lineWidth=8;cx.lineCap='round';
     cx.beginPath();cx.moveTo(BEDC.cx,ty+4);cx.lineTo(BEDC.cx-46,ty-24);cx.stroke();cx.lineCap='butt';
-    cx.fillStyle=ok?'#7FD8E8':'#F09098';cx.beginPath();cx.arc(BEDC.cx-52,ty-28,9,0,6.3);cx.fill();
-    plate(BEDC.cx-78,ty-46,ok?'已插管':'管路位置不對',
-      ok?'rgba(30,130,160,.95)':'rgba(180,50,60,.95)','#fff',12);}
+    cx.fillStyle='#7FD8E8';cx.beginPath();cx.arc(BEDC.cx-52,ty-28,9,0,6.3);cx.fill();
+    plate(BEDC.cx-78,ty-46,confirmed?'已插管 · 已確認位置':'已插管 · 尚未確認位置',
+      confirmed?'rgba(30,130,160,.95)':'rgba(120,110,60,.95)','#fff',12);}
 
   const on=compressingG();
   const chy=BEDC.cy-6, w=Math.sin(A*11.5), hs=on?1+w*.12:1;
@@ -643,8 +720,10 @@ function drawWard(cx,cv,meId){
     cx.fillStyle=c.coat?'#3A4A56':'#FFF';cx.font='700 15px sans-serif';cx.textAlign='center';
     cx.fillText(c.n,0,-14);
     cx.restore();
-    if(!c.online&&!SOLO&&!REPLAY)plate(c.x,y-66,'未上線','rgba(90,100,110,.9)','#CBD6DE',11);
-    if(G.leader===c.id)plate(c.x,y-126,'Leader','rgba(160,124,20,.96)','#fff',11);
+    /* item 7：Leader 的牌子原本掛在 y-126，離人物太遠、看不出是誰。改到頭頂正上方。 */
+    if(G.leader===c.id)plate(c.x,y-66,'Leader','rgba(160,124,20,.96)','#fff',11);
+    if(!c.online&&!SOLO&&!REPLAY)
+      plate(c.x,(G.leader===c.id?y-88:y-66),'未上線','rgba(90,100,110,.9)','#CBD6DE',11);
     if(down)plate(c.x,c.y-46,'被電到 '+Math.ceil(c.down)+'s','rgba(200,60,60,.96)','#fff',12);
     const bub=c.bubble&&c.bubble.lines?c.bubble.lines[c.bubble.i]:null;
     if(bub&&!down){cx.font='600 13px sans-serif';cx.textAlign='center';
@@ -721,13 +800,13 @@ function paintMonNums(){
   $('vHR').textContent=G.leads?(p.hr==null?'‑‑':p.hr):'‑‑';
   $('vSp').textContent=p.sp==null?'‑‑':p.sp;
   $('vCo').textContent=p.co2==null?'‑‑':p.co2;
-  $('vCo').style.color=G.air==='bad'?'#FF5566':(G.air==='ETT'?'#F5C542':'#C9A24A');
+  $('vCo').style.color=(G.air!=='BVM')?'#F5C542':'#C9A24A';
   $('vBP').textContent=G.nibp.r>0?Math.ceil(G.nibp.r)+'s…':(G.nibp.val||'未測量');
   const alm=$('alm');let main,s2;
   if(!G.leads){main='NO';s2='LEAD';alm.style.color='#8296A8';}
   else if(G.rosc){main=R.short;s2='ROSC';alm.style.color='#4CAF6E';}
   else if(G.check>0){main='CHECK';s2='';alm.style.color='#F5C542';}
-  else if(G.air==='bad'){main='NO CO₂';s2='';alm.style.color='#FF5566';}
+  /* item 8：不再由系統宣告「NO CO₂」—— 學員要自己看波形判斷 */
   else{main=R.short;s2=R.shock?'SHOCK':'';alm.style.color='#FF5566';}
   alm.innerHTML=main+'<span class="sub">'+(s2||'')+'</span>';
 }
@@ -758,12 +837,66 @@ function drawStrip(){
   x.strokeStyle='rgba(70,160,120,.30)';
   for(let gx=0;gx<w;gx+=sm*5){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.stroke();}
   for(let gy=0;gy<h;gy+=sm*5){x.beginPath();x.moveTo(0,gy);x.lineTo(w,gy);x.stroke();}
-  x.strokeStyle='#39F58C';x.lineWidth=2.1;x.lineJoin='round';x.beginPath();
-  for(let i=0;i<STRIP.n;i++){const v=STRIP.buf[(STRIP.head+i)%STRIP.n];
+  /* item 1：還沒貼上監測貼片＝什麼都沒接，畫成平的虛線，
+     跟真正的 asystole（實線、有細微雜訊）明確區分開來。 */
+  const unlead=!(G&&G.leads);
+  x.strokeStyle=unlead?'#5F7183':'#39F58C';x.lineWidth=unlead?1.8:2.1;
+  x.lineJoin='round';x.setLineDash(unlead?[9,8]:[]);x.beginPath();
+  for(let i=0;i<STRIP.n;i++){const v=unlead?0:STRIP.buf[(STRIP.head+i)%STRIP.n];
     const pxx=i*(w/(STRIP.n-1)),pyy=h*.52-v*h*.45;i?x.lineTo(pxx,pyy):x.moveTo(pxx,pyy);}
-  x.stroke();
+  x.stroke();x.setLineDash([]);
+  if(unlead){x.fillStyle='rgba(150,170,185,.65)';x.font='600 13px sans-serif';x.textAlign='center';
+    x.fillText('沒有訊號 — 監測貼片還沒貼上',w/2,h*.36);x.textAlign='left';}
   x.fillStyle='rgba(150,200,180,.5)';x.font='10px ui-monospace,monospace';x.textAlign='left';
   for(let s=1;s<STRIP.win;s++)x.fillText(s+'s',s*pps+2,h-3);
+}
+/* item 8：EtCO₂ 確認波形 —— 跟心律判讀同一種呈現（會動、有格線、學員自己判讀） */
+const TUBE={n:720,win:12,buf:new Float32Array(720),head:0,t:0,el:null,x:null,live:0};
+TUBE.el=$('cTube');TUBE.x=TUBE.el.getContext('2d');
+function pushTube(dt){
+  if(!G)return;
+  const show=(G.air&&G.air!=='BVM');
+  if(!show){TUBE.live=0;return;}
+  const sr=TUBE.n/TUBE.win;
+  if(!TUBE.live){TUBE.live=1;
+    for(let i=0;i<TUBE.n;i++)TUBE.buf[i]=IHCA.co2At(G,TUBE.t-(TUBE.n-1-i)/sr);
+    TUBE.head=0;}
+  const n=Math.min(sr*0.25,Math.round(dt*sr));
+  for(let i=0;i<n;i++){TUBE.t+=1/sr;TUBE.buf[TUBE.head]=IHCA.co2At(G,TUBE.t);
+    TUBE.head=(TUBE.head+1)%TUBE.n;}
+}
+function drawTube(){
+  const el=TUBE.el,dpr=devicePixelRatio||1,r=el.getBoundingClientRect();if(!r.width)return;
+  if(el.width!==Math.round(r.width*dpr)){el.width=Math.round(r.width*dpr);el.height=Math.round(r.height*dpr);}
+  const x=TUBE.x,w=r.width,h=r.height;
+  x.setTransform(dpr,0,0,dpr,0,0);
+  x.fillStyle='#0B0A05';x.fillRect(0,0,w,h);
+  x.strokeStyle='rgba(160,140,60,.14)';x.lineWidth=1;
+  const sm=w/TUBE.win/2;
+  for(let gx=0;gx<w;gx+=sm){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,h);x.stroke();}
+  for(let gy=0;gy<h;gy+=h/4){x.beginPath();x.moveTo(0,gy);x.lineTo(w,gy);x.stroke();}
+  x.strokeStyle='rgba(200,180,90,.30)';
+  x.beginPath();x.moveTo(0,h*.9);x.lineTo(w,h*.9);x.stroke();
+  x.strokeStyle='#F5C542';x.lineWidth=2.2;x.lineJoin='round';x.beginPath();
+  for(let i=0;i<TUBE.n;i++){const v=TUBE.buf[(TUBE.head+i)%TUBE.n];
+    const pxx=i*(w/(TUBE.n-1)),pyy=h*.9-v*h*.78;i?x.lineTo(pxx,pyy):x.moveTo(pxx,pyy);}
+  x.stroke();
+  x.fillStyle='rgba(200,190,140,.5)';x.font='10px ui-monospace,monospace';x.textAlign='left';
+  x.fillText('0',3,h-3);x.fillText('50 mmHg',3,12);
+}
+function paintTube(){
+  const box=$('tube');if(!box)return;
+  const me=meC();
+  const show=G&&!G.over&&me&&G.air!=='BVM'&&nearSt(me)==='head'&&
+    (G.tubeTest>0||(me.tubeSeen&&G.airCalled===null));
+  if(!show){box.classList.remove('on');return;}
+  box.classList.add('on');
+  $('tubeC').textContent=G.tubeTest>0?('擠球中 '+Math.ceil(G.tubeTest)+' 秒'):'判讀';
+  $('tubeN').innerHTML=G.tubeTest>0
+    ? '每一次擠球如果有進到肺裡，就會畫出一個<b>方波</b>；管子不在氣管裡就是一直平的。'
+    : '<b>連續的方波＝管子在氣管內。</b>平的＝不在，要拔掉重來。'
+      +'<br><span style="color:#8296A8">注意：沒有人在壓胸的時候，就算位置正確也不會有波形。</span>';
+  drawTube();
 }
 function paintStrip(){
   const box=$('strip');
@@ -867,15 +1000,24 @@ function buildPanel(){
   /* ── 子選單 ── */
   if(BUSY&&sub&&['ready','order','orderTxt','orderTo','concern','clue','rec','recPick'].indexOf(sub)<0)sub=null;
   if(sub){
-    if(sub==='drug'){H(3,'l','抽藥（在急救車旁）');
+    /* item 11：急救車拆成「藥物」與「點滴及輸血」兩類 */
+    if(sub==='drug'){H(3,'l','藥物（在急救車旁）');
       for(const m of K.DRUGS) m==='amio'?B(3,'am',K.ITEM[m].n+' ▸',SUB('amio'))
         :B(3,'d'+m,K.ITEM[m].n,A('draw',{k:m}));
+      B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
+    if(sub==='fluid'){H(3,'l','點滴及輸血（在急救車旁）');
+      for(const m of K.FLUIDS)B(3,'f'+m,K.ITEM[m].n,A('draw',{k:m}),'go');
       B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
     if(sub==='amio'){H(3,'l','Amiodarone 劑量（ACLS：第一劑 300mg，第二劑 150mg）');
       for(const d of K.AMIO)B(3,'a'+d,d+' mg',A('draw',{k:'amio',dose:d}),'go');
       B(3,'bk','← 返回',SUB('drug'),'ghost wide');setActs(strip3(L));return;}
     if(sub==='gear'){
-      B(3,'ge','插管器材 ▸',SUB('ett1'),'wide');
+      /* item 6：床頭已經指定過規格，就一鍵照著備，不用再點三層 */
+      if(G.ettAsk&&G.ettAsk.spec)
+        B(3,'gspec','✔ 照 '+G.ettAsk.toN+' 指定備妥（'+K.SCOPEN[G.ettAsk.spec.scope]
+          +'・'+G.ettAsk.spec.blade+'・'+G.ettAsk.spec.tube+'）',
+          A('grab',{k:'ett',spec:1}),'go wide');
+      B(3,'ge','插管器材 ▸（自己決定規格）',SUB('ett1'),'wide');
       B(3,'gc',K.ITEM.cath.n+' ('+G.caths+')',A('grab',{k:'cath'}),'',G.caths<=0);
       B(3,'gio',K.ITEM.io.n,A('grab',{k:'io'}));
       B(3,'gn',K.ITEM.needle.n,A('grab',{k:'needle'}));
@@ -890,6 +1032,17 @@ function buildPanel(){
     if(sub==='ett3'){H(3,'l','3/3　管徑');
       for(const x of K.TUBES)B(3,'t'+x,x+' 號',A('grab',{k:'ett',scope:ettScope,blade:ettBlade,tube:x}),'go');
       B(3,'bk','← 返回',SUB('ett2'),'ghost wide');setActs(strip3(L));return;}
+    /* item 6：床頭這一端 —— 有人來問，就跳出三步選擇視窗 */
+    if(sub==='ans1'){H(1,'l','<b>'+(G.ettAsk?G.ettAsk.byN:'')+'</b> 在急救車旁問你：器材要怎麼備？<br>1/3　喉頭鏡',null,0);
+      for(const x of K.SCOPES)B(1,'as'+x,K.SCOPEN[x],()=>{ettScope=x;sub='ans2';paint();},'go',false,0);
+      B(1,'bk','← 取消',()=>{sub=null;paint();},'ghost wide',false,0);setActs(strip3(L));return;}
+    if(sub==='ans2'){H(1,'l','2/3　鏡片號數',null,0);
+      for(const x of K.BLADES)B(1,'ab'+x,x,()=>{ettBlade=x;sub='ans3';paint();},'go',false,0);
+      B(1,'bk','← 返回',SUB('ans1'),'ghost wide',false,0);setActs(strip3(L));return;}
+    if(sub==='ans3'){H(1,'l','3/3　管徑',null,0);
+      for(const x of K.TUBES)B(1,'at'+x,x+' 號',
+        A('answerEtt',{scope:ettScope,blade:ettBlade,tube:x}),'go',false,0);
+      B(1,'bk','← 返回',SUB('ans2'),'ghost wide',false,0);setActs(strip3(L));return;}
     if(sub==='j'){for(const j of K.JOULES)B(3,'j'+j,j+' J',A('setJ',{j}),G.df.j===j?'go':'');
       B(3,'bk','← 返回',()=>{sub=null;paint();},'ghost wide');setActs(strip3(L));return;}
     if(sub==='clue'){const vis=G.clues.filter(q=>q.txt!==null);
@@ -918,7 +1071,12 @@ function buildPanel(){
         B(2,'rf'+f.k,f.n+'：'+(recF[f.k]||'（空白）')+' ▸',
           ()=>{buzz(6);recFld=f.k;sub='recPick';paint();},
           recF[f.k]?'go wide':'wide');}
-      B(2,'rok','✔ 送出紀錄',()=>{A('recSubmit',recF)();recF={};sub=null;},'hot wide');
+      /* item 3：原本寫成 A('recSubmit',recF)()，A() 回傳的函式裡用到 this.classList，
+         直接呼叫時 this 是 undefined（strict mode）→ 丟例外，送出永遠不會發生。 */
+      B(2,'rok','✔ 送出紀錄',function(){
+        buzz(8);this.classList.add('sent');
+        NET.act('recSubmit',recF);
+        recF={};sub=null;paint();},'hot wide');
       B(2,'bk','← 取消',()=>{recF={};sub=null;paint();},'ghost wide');
       setActs(strip3(L));return;}
     if(sub==='recPick'){
@@ -948,15 +1106,28 @@ function buildPanel(){
   if(G.check>0){
     H(1,'chk','心律檢查中 — 全部停手。停頓每多一秒，灌流就掉一分。',null,1);
     if(lead&&k==='foot'){
-      if(!G.check_id){
-      H(1,'idl','1/2　這是什麼節律？',null,1);
-      for(const r of K.RIDS)B(1,'id'+r.k,r.n,A('callRhythm',{r:r.k}),'lead',false,1);
-    }else{
-      H(1,'idl','2/2　已辨識為 <b>'+((K.RIDS.find(x=>x.k===G.check_id)||{}).n||G.check_id)
-        +'</b> —— 那要怎麼做？',null,1);
-      B(1,'cs','準備電擊',A('callDecision',{v:'shock'}),'hot',false,1);
-      B(1,'cn','繼續 CPR',A('callDecision',{v:'noshock'}),'go',false,1);
-    }
+      const rec=G.checkRec||{};
+      /* 連線版收到的是快照（check_id），單機／重播用的是原始狀態（checkRec.id） */
+      const cid_=(G.check_id!==undefined&&G.check_id!==null)?G.check_id:(rec.id||null);
+      if(!cid_){
+        H(1,'idl','1/3　螢幕上是什麼<b>電氣活動</b>？（還不能直接說 PEA）',null,1);
+        for(const r of K.RIDS)B(1,'id'+r.k,r.n,A('callRhythm',{r:r.k}),'lead',false,1);
+      }else if(cid_==='ORG'&&!rec.perf){
+        /* item 13：PEA = 有組織的電氣活動 + 摸不到脈搏。
+           系統不擋你直接宣告，但沒有人摸過就宣告會被記一筆。 */
+        H(1,'idl','2/3　有組織的電氣活動 —— <b>摸得到脈搏嗎？</b>',null,1);
+        H(1,'idp',rec.pulseCalled==='no'?'<span class="good">已經有人回報「摸不到脈搏」</span>'
+          :rec.pulseCalled==='yes'?'<span class="good">已經有人回報「摸到脈搏了」</span>'
+          :'<span class="bad">還沒有人摸脈搏並喊出來 —— 現在宣告等於用看的。</span>',null,1);
+        for(const q of K.PERF)B(1,'pf'+q.k,q.n,A('callPerf',{v:q.k}),
+          q.k==='pulse'?'go':'lead',false,1);
+      }else{
+        const nm=(K.RIDS.find(x=>x.k===cid_)||{}).n||cid_;
+        H(1,'idl','3/3　已判定為 <b>'+nm+(rec.perf==='nopulse'?' · PEA':'')
+          +'</b> —— 那要怎麼做？',null,1);
+        B(1,'cs','準備電擊',A('callDecision',{v:'shock'}),'hot',false,1);
+        B(1,'cn','繼續 CPR',A('callDecision',{v:'noshock'}),'go',false,1);
+      }
   }
     else if(lead)H(1,'cl','Leader 要站到床尾才能辨識心律。',null,1);
     else H(1,'cw','等 Leader'+(G.leader?'（'+C(G.leader).n+'）':'')+'宣告判讀。');
@@ -979,17 +1150,31 @@ function buildPanel(){
     B(1,'nibp',G.nibp.r>0?'NIBP 量測中 '+Math.ceil(G.nibp.r)+'s':'量 NIBP 30s',A('nibp'),'',G.nibp.r>0,4);
   }
   if(k==='head'){
+    /* item 6：有人來問器材規格 —— 跳出選擇視窗，排在最上面 */
+    if(G.ettAsk&&!G.ettAsk.spec&&G.ettAsk.to===c.id)
+      B(1,'ansq','❓ '+G.ettAsk.byN+' 問你：插管器材要怎麼備？▸',SUB('ans1'),'lead wide',false,0);
+    /* item 8：插了管之後，位置對不對要自己接 EtCO₂ 看 —— 系統不會說。 */
+    if(G.air!=='BVM'){
+      if(G.tubeTest>0){
+        H(1,'tt','正在擠球看波形… '+Math.ceil(G.tubeTest)+' 秒','hint',0);
+      }else if(!c.tubeSeen){
+        B(1,'ct','🫁 確認管路位置（接 EtCO₂、擠球 '+K.TUBETEST+'s）',A('confirmTube'),
+          'confirm wide',false,0);
+      }else{
+        H(1,'tj','看到連續的方波了嗎？<b>方波＝在氣管</b>，平的＝不在。',null,0);
+        B(1,'tok','✔ 管路位置正確',A('callTube',{v:'ok'}),'go',false,0);
+        B(1,'tout','✖ 拔管，改回甦醒球',A('callTube',{v:'out'}),'hot',false,0);
+        B(1,'tre','再看一次波形',A('confirmTube'),'ghost wide',false,0);
+      }
+    }
     B(1,'bag',G.pauseVent?'壓甦醒球 ('+G.breaths+'/2)':'壓甦醒球',A('bag'),
       G.pauseVent?'go wide':(G.air==='ETT'?'go wide':''),false,3);
     const h=G.ch.find(o=>o.id!==c.id&&o.active!==false&&o.hold==='ett'&&Math.hypot(o.x-c.x,o.y-c.y)<165);
-    if(G.air==='bad'){H(1,'nb','EtCO₂ 沒有波形，管子位置不對。','hint bad');
-      if(c.hold)H(1,'hb','手上有東西就不能插管，先放下。');
-      else if(h)B(1,'re','拔管重插 15s — '+h.n+' 遞給你',A('reett'),'hot wide',false,2);
-      else H(1,'nh','重插一樣要有人再備一套器材送過來。');}
-    else if(G.air==='BVM'){
+    if(G.air==='BVM'){
       if(c.hold)H(1,'hb','手上有東西就不能插管，先放下。');
       else if(h)B(1,'et','執行插管 15s（'+K.SCOPEN[h.ettSpec.scope]+'）— '+h.n+' 遞給你',A('ett'),'go wide',false,2);
-      else H(1,'nh','要插管的話，需要有人去急救車拿插管器材，走到你旁邊。');}
+      else H(1,'nh','要插管的話，需要有人去急救車拿插管器材，走到你旁邊。'
+        +(G.ettAsk&&G.ettAsk.spec?'':'　也可以請他先問你要什麼規格。'));}
     else{
       /* A8：插管後沒有人擠就是真的沒有通氣。做成視覺節拍，抬頭就知道該不該壓。 */
       const vt=G.ventT||0, due=vt>=6, phase=Math.min(1,vt/6);
@@ -1028,8 +1213,13 @@ function buildPanel(){
   if(eq==='pc')B(1,'cht','查病歷 12s',A('chart'),'go',false,5);
   /* 站在急救車旁，拿東西就是「現在能做的事」，不該埋在第三層 */
   if(eq==='cart'&&!c.hold&&!c.push){
-    B(1,'dr','抽藥 ▸',SUB('drug'),'go',false,2);
-    B(1,'gr','拿器材 ▸',SUB('gear'),'go',false,2);}
+    B(1,'dr','藥物 ▸',SUB('drug'),'go',false,2);
+    B(1,'fl','點滴及輸血 ▸',SUB('fluid'),'go',false,2);
+    B(1,'gr','拿器材 ▸',SUB('gear'),'go',false,2);
+    /* item 6：床頭有人的時候，可以先問要備什麼規格再動手 */
+    const hd=G.ch.find(o=>o.id!==c.id&&o.active!==false&&nearSt(o)==='head'&&!(o.down>0));
+    if(hd&&!(G.ettAsk&&G.ettAsk.spec))
+      B(1,'ask2','❓ 問 '+hd.n+'（床頭）：插管器材要怎麼備？',A('askEtt'),'talk wide',false,2);}
   if(eq==='pc')B(1,'tc','📢 報時給全隊',A('timeCall'),'talk wide',false,5);
   if(eq==='pc')B(1,'rec','📝 紀錄一筆',function(){recF={};A('recBegin').call(this);
     sub='rec';paint();},'go wide',false,5);
@@ -1049,11 +1239,18 @@ function buildPanel(){
      這一層在 busy 期間仍然開放，而且與論文指標有關的按鈕（複誦、回報完成、
      喊出線索）固定在最上面、一次點擊，避免把「找按鈕的時間」量進延遲指標。 */
   if(k==='foot'&&lead)B(2,'or','下 Order ▸',SUB('order'),'talk wide');
-  if(G.order&&G.order.by!==c.id&&!G.order.ack.includes(c.id)){
-    const mine=(!G.order.to||G.order.to===c.id);
-    B(2,'ack',(mine?'✓ 複誦：':'✓ 代為回應：')+G.order.txt,A('ack'),mine?'go wide':'talk wide');}
-  if(G.order&&!G.order.done&&(G.order.ack.includes(c.id)||G.order.to===c.id))
-    B(2,'dn','✔ 回報完成：'+G.order.txt,A('doneReport'),'go wide');
+  /* CH-3：同時可能有好幾則 order 在跑，每一則都有自己的複誦與回報 */
+  for(const o of (G.orderQ||[])){
+    if(o.by!==c.id&&o.ack.indexOf(c.id)<0){
+      const mine=(!o.to||o.to===c.id);
+      B(2,'ack'+o.id,(mine?'✓ 複誦：':'✓ 代為回應：')+o.txt,A('ack',{id:o.id}),
+        mine?'go wide':'talk wide');}
+    if(!o.done&&(o.ack.indexOf(c.id)>=0||o.to===c.id))
+      B(2,'dn'+o.id,'✔ 回報完成：'+o.txt,A('doneReport',{id:o.id}),'go wide');}
+  /* CH-5：CUS 的重點在被聽見 —— 沒有回應這個動作，就只量到敢不敢說 */
+  for(const q of (G.concerns||[])){
+    if(q.resAt!==null||q.by===c.id)continue;
+    B(2,'rc'+q.id,'👂 回應 '+q.n+' 的疑慮：'+q.txt,A('respondConcern',{id:q.id}),'warn wide');}
   G.clues.filter(q=>q.txt!==null&&!q.cast)
     .forEach(q=>B(2,'ct'+q.src,'📢 大聲喊出：'+K.SRC[q.src],A('cast',{src:q.src}),'go wide'));
   B(2,'rdy','📢 回報 ▸',SUB('ready'),'talk wide');
@@ -1108,7 +1305,8 @@ function readyList(c,k,hk){
   const R=K.READYFOR,out=[];
   if(G.roscFelt&&!G.roscKnown&&(c.recent||[]).includes('我摸到脈搏了！'))out.push('我摸到脈搏了！','病人有脈搏，停止壓胸');
   if(G.cpr===c.id)out.push.apply(out,R.cpr);
-  if(k==='head')out.push.apply(out,R.head);
+  if(k==='head')out.push.apply(out,R.head.filter(t=>
+    (t.indexOf('管路')!==0)||(c.tubeSeen&&G.air!=='BVM')));
   if(nearEq(c)==='pc')out.push.apply(out,R.rec);
   if(hk==='drug')out.push.apply(out,R.drug);
   if(hk==='cath')out.push.apply(out,R.cath);
@@ -1166,6 +1364,19 @@ function paintGate(){
       +'<p>請用終端機印出來的教師網址開啟（網址結尾有 <b>&amp;k=…</b>）。</p></div>';
     return;
   }
+  /* item 16：入場代碼每一場都不一樣 —— 舊的 QR 螢幕截圖不能再進來 */
+  if(DENIED==='join'||DENIED==='locked'){
+    e.classList.add('on');
+    const h2=DENIED==='locked'
+      ? '<div class="inner"><h1>這一場已經鎖定入場</h1>'
+        +'<p>教師已經把入場鎖起來，演練開始後不再開放新的人進入。<br>'
+        +'如果你是斷線重連，請確認用的是同一支手機、同一組人事號。</p></div>'
+      : '<div class="inner"><h1>入場代碼已經換過了</h1>'
+        +'<p>這個 QR code 是舊的。請重新掃投影幕上<b>現在</b>顯示的 QR code。<br>'
+        +'（每一場上課都會換一組，舊的截圖不能用 —— 這是為了保護學員資料。）</p></div>';
+    if(h2!==_lastGate){_lastGate=h2;e.innerHTML=h2;}
+    return;
+  }
   if(MODE==='player'){
     if(ME&&LOBBY&&LOBBY.phase!=='lobby'){e.classList.remove('on');return;}
     if(!LOBBY){e.classList.add('on');
@@ -1195,6 +1406,15 @@ function paintGate(){
     const html='<div class="inner"><h1>輸入一個字</h1>'
       +'<p>這個字就是你在畫面上的代號，全隊都看得到。可以是名字裡的一個字。</p>'
       +'<input id="nameIn" maxlength="2" value="'+gateName.replace(/"/g,'')+'" placeholder="季">'
+      +'<div class="lab">人事號</div>'
+      +'<p style="margin:-4px 0 8px">只用來把你三場演練的紀錄串在一起，<b>不會顯示在任何畫面上</b>，'
+      +'報表與錄影檔裡也只會存不可逆的代碼。</p>'
+      +'<input id="eidIn" maxlength="20" inputmode="latin" style="font-size:24px;letter-spacing:.12em" '
+      +'value="'+gateEid.replace(/"/g,'')+'" placeholder="A123456">'
+      +'<div class="lab">目前身分／年資</div>'
+      +'<div id="pgys" style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">'
+      +PGYOPT.map(x=>'<button class="'+(gatePgy===x?'on':'')+'" data-p="'+x+'" '
+        +'style="min-height:46px;font-size:13px">'+x+'</button>').join('')+'</div>'
       +'<div class="lab">選一個顏色</div><div id="slots">'
       +taken.map(s2=>'<button class="'+(gateSlot===s2.id?'on ':'')+(s2.online?'taken':'')+'" data-id="'+s2.id+'"'
         +(s2.online?' disabled':'')+'>'
@@ -1204,14 +1424,22 @@ function paintGate(){
       +'</div>';
     if(html!==_lastGate){_lastGate=html;e.innerHTML=html;
       $('nameIn').oninput=ev=>{gateName=ev.target.value.trim();};
+      $('eidIn').oninput=ev=>{gateEid=ev.target.value.trim();};
+      [...$('pgys').children].forEach(b=>b.onclick=()=>{gatePgy=b.dataset.p;
+        [...$('pgys').children].forEach(x=>x.classList.remove('on'));b.classList.add('on');});
       [...$('slots').children].forEach(b=>b.onclick=()=>{gateSlot=b.dataset.id;
         [...$('slots').children].forEach(x=>x.classList.remove('on'));b.classList.add('on');});
       $('joinBtn').onclick=()=>{
         const nm=(gateName||'').trim();
         if(!nm){$('nameIn').focus();return;}
+        if(!gateEid){$('eidIn').focus();toast('請填人事號 — 這是把你不同場次的紀錄串起來用的');return;}
+        if(!gatePgy){toast('請選一個身分／年資');return;}
         localStorage.setItem('ihcaName',nm);
+        localStorage.setItem('ihcaEid',gateEid);
+        localStorage.setItem('ihcaPgy',gatePgy);
         if(gateSlot)localStorage.setItem('ihcaSlot',gateSlot);
-        NET.send({t:'hello',role:'player',name:nm,slot:gateSlot||'',room:ROOM});
+        NET.send({t:'hello',role:'player',name:nm,slot:gateSlot||'',
+          room:ROOM,join:JOIN,eid:gateEid,pgy:gatePgy});
       };}
     return;
   }
@@ -1321,8 +1549,22 @@ function paintTC(){
    +'<div><div style="font-family:var(--mono);font-size:15px;color:#8FE3F5;word-break:break-all">'+studentURL()+'</div>'
    +'<div style="margin-top:10px;font-size:12px;color:var(--dim)">房間代碼</div>'
    +'<div style="font-family:var(--mono);font-size:34px;letter-spacing:.16em;color:#E8B84B">'+ROOM+'</div></div></div>'
+   /* item 16：入場代碼每一場都可以換掉，舊的 QR 螢幕截圖立刻失效 */
+   +'<h2>入場管制</h2><div class="g">'
+   +'<button id="tcJoin">🔄 換一組入場代碼</button>'
+   +'<button class="'+(LOBBY.joinLock?'warn':'')+'" id="tcLock">'
+     +(LOBBY.joinLock?'🔒 已鎖定入場（點一下開放）':'🔓 目前開放入場（點一下鎖定）')+'</button></div>'
+   +'<p class="note">目前入場代碼 <b style="font-family:var(--mono);color:#8FE3F5">'+(LOBBY.join||'')+'</b>。'
+   +'換過之後，之前掃過的 QR code 與截圖都不能再進來 —— 上完課換一組，'
+   +'學員的錄影檔就不會被不相干的人翻到。<br>'
+   +'鎖定之後，只有已經登記過人事號的人可以斷線重連，新的人進不來。</p>'
+   +'<p class="note">'+(LOBBY.anon
+       ?'<b style="color:#6FE0A6">匿名模式：開</b> — 錄影檔只存 P1…P6 與人事號的不可逆代碼。'
+       :'<b style="color:#E8A33D">匿名模式：關</b> — 錄影檔會存學員的字與人事號。'
+        +'正式收資料前請在後台設 <code>ANON=1</code> 與 <code>ANON_SALT</code>。')
+   +'　本次已經跑了第 '+(LOBBY.sessionIndex||0)+' 場。</p>'
    +'<h2>其他畫面</h2><p class="note">主機投影：'+location.origin+'/?m=host&k='+TKEY+'<br>'
-   +'重播播放器：'+location.origin+'/?m=replay</p>'
+   +'重播播放器：'+location.origin+'/?m=replay&k='+TKEY+'</p>'
    +'</div>';
   if(html!==_lastTC){_lastTC=html;e.innerHTML=html;
     e.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>{
@@ -1339,6 +1581,9 @@ function paintTC(){
     on('tcReport',()=>NET.send({t:'history'}));
     on('tcRec',()=>NET.send({t:'recording'}));
     on('tcNew',()=>{if(confirm('重新開一局？'))NET.send({t:'newgame'});});
+    on('tcJoin',()=>{if(confirm('換一組入場代碼？之前掃過的 QR code 就不能再進來了。'))
+      NET.send({t:'newjoin'});});
+    on('tcLock',()=>NET.send({t:'joinlock',on:!LOBBY.joinLock}));
   }
 }
 function downloadRec(rec){
@@ -1424,8 +1669,12 @@ function renderSheet(){
   const rep=HIST.report;
   const head=HIST.report[0].rows[0][1].indexOf('恢復')===0?'恢復自發循環':'急救結束';
   let h='<div class="inner"><h3>'+head+'</h3><p class="sub">這些數字全程都藏著，現在才公布。</p>';
-  for(const g of rep){h+='<h4>'+g.g+'</h4>';
-    for(const r of g.rows)h+='<div class="row'+(r[2]?' '+r[2]:'')+'"><span>'+r[0]+'</span><span>'+String(r[1])+'</span></div>';}
+  /* FB-1：最該改的三件事放在最上面（引擎已經依教學權重排好） */
+  const topG=rep.filter(g=>g.top);
+  for(const g of topG){h+='<h4 class="top">'+g.g+'</h4>';
+    for(const r of g.rows)h+='<div class="row big'+(r[2]?' '+r[2]:'')+'">'
+      +'<span>'+r[0]+'</span><span>'+String(r[1])+'</span></div>';}
+  /* item 10：debriefing 的實際流程是先看「誰在什麼時候做了什麼」，再回頭看數字。 */
   h+='<h4>誰在什麼時候做了什麼</h4>'
     +'<canvas id="swim"></canvas>'
     +'<div class="legend">'+Object.keys(SPANNAME).filter(k=>k!=='job')
@@ -1433,6 +1682,9 @@ function renderSheet(){
       +'<span><i style="background:#6FC8DE;border-radius:50%"></i>講話／回報</span>'
       +'<span><i style="background:#E8B84B;border-radius:50%"></i>Leader 下令與判讀</span>'
       +'<span><i style="background:#FF6B7E"></i>放電</span></div>';
+  for(const g of rep){if(g.top)continue;
+    h+='<h4>'+g.g+'</h4>';
+    for(const r of g.rows)h+='<div class="row'+(r[2]?' '+r[2]:'')+'"><span>'+r[0]+'</span><span>'+String(r[1])+'</span></div>';}
   h+='<h4>每個人做了什麼</h4>';
   for(const p of HIST.perPerson)
     h+='<div class="row"><span style="color:'+p.col+';font-weight:700">'+p.n+(p.lead?' ★':'')+'</span>'
@@ -1567,7 +1819,8 @@ function replayGate(){
    +'播放時是把整場重新算一次 — 所以可以隨意拉時間軸、變速、切換看任何一個人的視角。</p>'
    +'<div class="lab">從電腦選檔案</div>'
    +'<input type="file" id="rpFile" accept="application/json" style="width:100%;padding:14px;background:#141C24;border:1px solid #34485A;border-radius:12px;color:#DCE6EE">'
-   +'<div class="lab">或選伺服器上的錄影</div><div id="rpList" style="display:flex;flex-direction:column;gap:7px"></div>'
+   +'<div class="lab">或選伺服器上的錄影（需要教師金鑰）</div>'
+   +'<div id="rpList" style="display:flex;flex-direction:column;gap:7px"></div>'
    +'</div>';
   $('rpFile').onchange=ev=>{
     const f=ev.target.files[0];if(!f)return;
@@ -1578,21 +1831,27 @@ function replayGate(){
   /* 網址帶了 ?f=檔名 就直接載入，跳過挑選畫面 */
   const want=QS.get('f');
   if(want&&!isFile){
-    fetch('/recordings/'+encodeURIComponent(want)).then(r=>{
+    fetch('/recordings/'+encodeURIComponent(want)+'?k='+encodeURIComponent(TKEY)).then(r=>{
       if(!r.ok)throw new Error('找不到 '+want);return r.json();})
       .then(rec=>{if(rpLoad(rec)!==false)e.classList.remove('on');})
       .catch(err=>{alert('自動載入失敗：'+err.message+'\n請從下面的清單挑一個。');});
   }
-  if(!isFile)fetch('/recordings').then(r=>r.json()).then(list=>{
+  if(!isFile)fetch('/recordings?k='+encodeURIComponent(TKEY)).then(r=>{
+    if(r.status===403)throw new Error('403');return r.json();}).then(list=>{
     const box=$('rpList');
     if(!list.length){box.innerHTML='<p style="color:#8296A8;font-size:13px">伺服器上還沒有錄影檔。</p>';return;}
     box.innerHTML='';
     for(const f of list){const b=document.createElement('button');
       b.textContent=f;b.style.minHeight='44px';
-      b.onclick=()=>fetch('/recordings/'+f).then(r=>r.json()).then(rec=>{
-        if(rpLoad(rec)!==false)e.classList.remove('on');});
+      b.onclick=()=>fetch('/recordings/'+f+'?k='+encodeURIComponent(TKEY))
+        .then(r=>r.json()).then(rec=>{
+          if(rpLoad(rec)!==false)e.classList.remove('on');});
       box.appendChild(b);}
-  }).catch(()=>{});
+  }).catch(err=>{
+    const box=$('rpList');
+    box.innerHTML='<p style="color:#FF8A93;font-size:13px;line-height:1.6">'
+      +'伺服器上的錄影檔需要教師金鑰才能列出（v4.0 起，錄影檔含學員資料，不再公開）。<br>'
+      +'請用 <b>…/?m=replay&amp;k=你的教師金鑰</b> 開啟，或直接從電腦選檔案。</p>';});
 }
 
 /* ═══════════ 輸入 ═══════════ */
@@ -1602,8 +1861,19 @@ $('spd').onclick=()=>{if(SOLO){speed=({1:2,2:3,3:1})[speed];$('spd').textContent
 $('pausebtn').onclick=()=>{if(SOLO&&LOCAL){soloCtl('__pause',{on:!LOCAL.paused});
   $('pausebtn').classList.toggle('on',LOCAL.paused);
   $('pausebtn').textContent=LOCAL.paused?'▶ 繼續':'⏸ 暫停';paint();}};
-$('ordb').onclick=function(){buzz(10);this.classList.add('sent');
-  setTimeout(()=>{try{this.classList.remove('sent');}catch(e){}},450);NET.act('ack');};
+$('feedtog').onclick=function(){
+  const off=document.body.classList.toggle('feed-off');
+  this.textContent=off?'◀':'▶';
+  try{localStorage.setItem('ihcaFeedOff',off?'1':'');}catch(e){}
+  _rc=null;buzz(8);};
+if(localStorage.getItem('ihcaFeedOff')==='1'){
+  document.body.classList.add('feed-off');$('feedtog').textContent='◀';}
+$('rogb').onclick=function(){
+  if(!_rogId)return;
+  buzz(10);this.classList.add('sent');this.disabled=true;this.textContent='已回應';
+  setTimeout(()=>{try{this.classList.remove('sent');}catch(e){}},450);
+  NET.act('roger',{id:_rogId});
+  $('roger').classList.remove('on');};
 if(MODE==='player'||REPLAY){$('spd').style.display='none';$('pausebtn').style.display='none';}
 if(MODE==='host'||MODE==='teacher')$('stick').style.display='none';
 /* ═══ 浮動搖桿：按住病房畫面任何位置拖曳就能走；輕點＝走到那個站位 ═══ */
@@ -1695,10 +1965,11 @@ function sfxWatch(){
   if(G.df.charged&&!W_.charged)SFX.ok(); W_.charged=G.df.charged;
   if(G.check>0&&W_.check<=0)SFX.alarm(); W_.check=G.check;
   if(G.clues.length>W_.clues){SFX.ok();W_.clues=G.clues.length;}
-  if(G.air!==W_.air){G.air==='ETT'?SFX.ok():SFX.alarm();W_.air=G.air;}
+  if(G.air!==W_.air){SFX.bcast();W_.air=G.air;}   /* item 8：不再用音效洩漏對錯 */
   if(G.rosc&&!W_.rosc)SFX.rosc(); W_.rosc=G.rosc;
   const d=G.ch.filter(c=>c.down>0).length; if(d>W_.down)SFX.alarm(); W_.down=d;
-  const ot=G.order?G.order.txt+G.order.at:null;
+  const oq=G.orderQ||[];
+  const ot=oq.length?(oq[oq.length-1].txt+oq[oq.length-1].at):null;
   if(ot&&ot!==W_.order)SFX.bcast(); W_.order=ot;
   if(G.pauseVent&&G.breaths>0&&G.breaths!==W_.br)SFX.breath(); W_.br=G.breaths;
 }
@@ -1708,31 +1979,40 @@ let _lastFeedH='',_askedHist=0;
 function paint(){
   if(!G)return;
   paintWho();
-  const o=$('ord');
-  if(G.order&&MODE!=='teacher'){o.classList.add('on');
-    $('ordx').textContent=G.order.txt+(G.order.ack.length?'　（'+G.order.ack.map(i=>C(i).n).join('、')+' 已複誦）':'');
-    const mine=G.order.by===ME,done=G.order.ack.includes(ME);
-    $('ordb').style.display=(mine||MODE==='host'||REPLAY)?'none':'';
-    $('ordb').textContent=done?'已複誦':'收到';$('ordb').disabled=done;}
-  else o.classList.remove('on');
-  const fitems=[...G.feed].reverse().map(f=>
-    '<div class="f'+(f.big?' big':'')+'" data-k="'+f.at+f.n+'"><b style="color:'+f.col+'">'
-    +f.n+'</b>'+f.txt+'</div>');
-  const fh=fitems.join('');
-  /* 直立手機的那一條只留最新兩則。
-     不要靠 max-height + overflow 裁 —— 反向 flex 容器溢位時，瀏覽器裁掉的是新的那一端，
-     結果會變成舊訊息留在畫面上、新訊息永遠看不到。 */
-  const fhp=fitems.slice(0,2).join('');
+
+  /* item 2：order、對話、系統提示全部走同一條右側訊息流，字級一律相同。
+     item 5：所有裝置都用這一條 —— 直立手機也不再只看得到兩則。
+     最新的在最上面，容器可以往下捲看更早的。 */
+  const fh='<div class="cap">現場對話與指令</div>'+G.feed.map(f=>
+    '<div class="f'+(f.kind&&f.kind!=='say'?' '+f.kind:'')+'" data-k="'+f.at+f.n+'">'
+    +'<b style="color:'+f.col+'">'+f.n+'</b>'+f.txt+'</div>').join('');
   if(fh!==_lastFeedH){
-    const seen=new Set([...$('feed').children].map(x=>x.dataset.k));
-    _lastFeedH=fh;
-    for(const [id,html] of [['feed',fh],['feedp',fhp]]){
-      const el=$(id); if(!el)continue;
-      el.innerHTML=html;
-      [...el.children].forEach(x=>{if(!seen.has(x.dataset.k))x.classList.add('new');});}}
+    const el=$('feed');
+    const seen=new Set([...el.children].map(x=>x.dataset.k));
+    _lastFeedH=fh; el.innerHTML=fh;
+    [...el.children].forEach(x=>{if(x.dataset.k&&!seen.has(x.dataset.k))x.classList.add('new');});}
+  paintRoger();
   if(MODE==='player'||SOLO){paintYouAre();buildPanel();}
   if(G.over&&(SOLO||REPLAY)&&!HIST){HIST=IHCA.history(SOLO?LOCAL:RP.finalG);renderSheet();}
   if(G.over&&!SOLO&&!REPLAY&&!HIST&&!_askedHist){_askedHist=1;NET.send({t:'history'});}
+}
+
+/* item 9：畫面下方的「收到」。三秒內沒點就消失 —— 不強迫，但看得到誰有回應。 */
+let _rogId=null;
+function paintRoger(){
+  const box=$('roger');if(!box)return;
+  if(!G||MODE==='host'||MODE==='teacher'||REPLAY||!ME||G.over){box.classList.remove('on');return;}
+  const list=(G.pings||[]).filter(q=>q.by!==ME&&(q.ack||[]).indexOf(ME)<0);
+  const q=list.length?list[list.length-1]:null;
+  if(!q){box.classList.remove('on');_rogId=null;return;}
+  const left=Math.max(0,K.ROGERTTL-(G.t-q.t));
+  if(left<=0){box.classList.remove('on');return;}
+  if(_rogId!==q.id){_rogId=q.id;
+    $('rogx').innerHTML='<b style="color:'+q.col+'">'+q.n+'</b>'+q.txt;
+    $('rogb').disabled=false;$('rogb').textContent='收到';
+    buzz(12);}
+  $('rogbar').style.width=Math.round(left/K.ROGERTTL*100)+'%';
+  box.classList.add('on');
 }
 
 /* ═══════════ 主迴圈 ═══════════ */
@@ -1754,10 +2034,10 @@ function loop(ts){
     const meC0=meC();
     if(meC0&&(meC0.busy||meC0.down>0))PRED.vx=PRED.vy=0;
     pushMon(dt0*(SOLO?speed:(REPLAY&&RP.playing?RP.speed:1)));
-    pushStrip(dt0);
+    pushStrip(dt0);pushTube(dt0);
     sfxWatch();
     drawWard(cx,cv,ME);
-    drawMon();paintMonNums();paintStrip();paintRecs();
+    drawMon();paintMonNums();paintStrip();paintTube();paintRecs();
     const meNow=meC();
     const atRec=meNow?nearEq(meNow)==='pc':false;
     const showT=(MODE==='host'||MODE==='teacher'||REPLAY)?true:atRec;
