@@ -18,13 +18,13 @@ primary_region = "nrt"          # 東京，離台灣最近
   ROOM = "2468"                 # 固定房間代碼
   # ★ TKEY 一定要設。沒設的話 server.js 會用隨機值當教師金鑰，
   #   機器每次休眠醒來就換一組，你手上的 ?m=teacher&k=... 網址會失效。
-  TKEY = "emed2026"             # 改成你自己的
+  # TKEY 用 fly secrets set TKEY=... 設定，不要寫在這個檔案裡
 
   # ── 課後自動把錄影檔寄到信箱 ──
-  MAIL_TO   = "ooleo76@gmail.com"
-  MAIL_USER = "ooleo76@gmail.com"     # 寄件帳號，通常跟收件同一個
-  # ★ MAIL_PASS（應用程式密碼）不要寫在這裡 —— 這個檔案會進 Git。
-  #   改用：fly secrets set MAIL_PASS=你的16碼應用程式密碼
+  MAIL_TO   = "A408J6@chimei.org.tw"  # 院內信箱：研究資料不要寄到個人商業信箱
+  ANON      = "1"                     # 正式收資料一定要開
+  # ★ 這些不要寫在這裡 —— 這個檔案會進 Git：
+  #   fly secrets set TKEY=... MAIL_USER=... MAIL_PASS=... MAIL_HOST=... ANON_SALT=...
 
 # 錄影檔要留在重開機之後 —— 沒有這一段，機器一重啟資料就沒了。
 # 一場錄影只有幾十 KB，1GB 綽綽有餘。
