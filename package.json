@@ -1,6 +1,6 @@
 {
   "name": "ihca-team-resuscitation",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "IHCA 團隊復甦模擬器 — 急診 TRM 教學用多人版",
   "main": "server.js",
   "scripts": {

@@ -160,8 +160,8 @@ function roster(){
     const sl=R.slots[id];if(!sl)continue;
     out.push(ANON
       ?{slot:id,code:'P'+(SIM.K.SLOTS.findIndex(z=>z.id===id)+1),
-        pid:anonId(sl.eid),pgy:sl.pgy||null}
-      :{slot:id,name:sl.name,eid:sl.eid||null,pgy:sl.pgy||null});}
+        pid:anonId(sl.eid),pgy:sl.pgy||null,visit:sl.visit||null}
+      :{slot:id,name:sl.name,eid:sl.eid||null,pgy:sl.pgy||null,visit:sl.visit||null});}
   return out;}
 
 /* 熟悉環境結束時單獨存一份檔。
@@ -173,7 +173,7 @@ function saveFamiliarization(){
   const per={};
   for(const r of rost){
     const d=(G.drill||{})[r.slot]||{};
-    per[r.slot]={name:r.name||r.code,pgy:r.pgy||null,pid:r.pid||null,
+    per[r.slot]={name:r.name||r.code,pgy:r.pgy||null,visit:r.visit||null,pid:r.pid||null,
       items:SIM.K.DRILL.map(it=>({k:it.k,n:it.n,at:d[it.k]!==undefined?d[it.k]:null})),
       complete:SIM.K.DRILL.every(it=>d[it.k]!==undefined),
       lastAt:SIM.K.DRILL.reduce((a,it)=>d[it.k]!==undefined?Math.max(a,d[it.k]):a,0)};
@@ -247,6 +247,7 @@ function lobbyInfo(){
     slots:SIM.K.SLOTS.slice(0,R.setup.n).map(s=>({id:s.id,c:s.c,coat:!!s.coat,
       name:R.slots[s.id]?R.slots[s.id].name:null,
       pgy:R.slots[s.id]?(R.slots[s.id].pgy||null):null,
+      visit:R.slots[s.id]?(R.slots[s.id].visit||null):null,
       hasEid:!!(R.slots[s.id]&&R.slots[s.id].eid),
       online:!!(R.slots[s.id]&&R.slots[s.id].ws)})),
     join:JOIN, joinLock:JOINLOCK, anon:ANON, sessionIndex:SESSION_INDEX,
@@ -308,7 +309,9 @@ function onMsg(ws,m){
          畫面上永遠只出現那一個字，人事號不會顯示給任何人看。 */
       const eid=String(m.eid||'').trim().slice(0,20);
       const pgy=String(m.pgy||'').trim().slice(0,12);
-      R.slots[id]={name:nm,eid,pgy,ws};
+      /* 同一批人裡可能有人第一次、有人第三次 —— 每一場都重新問 */
+      const visit=String(m.visit||'').trim().slice(0,12);
+      R.slots[id]={name:nm,eid,pgy,visit,ws};
       ws.meta.slot=id;ws.meta.eid=eid;
       const c=R.G.ch.find(x=>x.id===id);
       if(c){c.n=ANON?('P'+(SIM.K.SLOTS.findIndex(z=>z.id===id)+1)):nm;c.online=true;}
