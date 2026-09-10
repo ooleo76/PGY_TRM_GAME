@@ -43,17 +43,22 @@ function serve(req,res){
   if(u==='/favicon.ico'){res.writeHead(204);return res.end();}
   /* DP-1：錄影檔含學員的操作紀錄與代號。WebSocket 有房間代碼與教師金鑰，
      但 v3.4 的靜態伺服器完全沒有驗證 —— 部署到公開網址之後，
-     任何知道網址的人都可以 GET /recordings 列出並下載全部檔案。 */
-  if(u==='/recordings'||u.indexOf('/recordings/')===0){
-    if(qs.get('k')!==TKEY){
-      res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'});
-      return res.end('需要教師金鑰才能存取錄影檔');}
+     任何知道網址的人都可以 GET /recordings 列出並下載全部檔案。
+
+     v4.0.1：驗證改用「正規化之後的實際路徑」，不是使用者給的字串。
+     只比對字串的話，/x/../recordings/xxx.json 這種寫法不會命中 /recordings 前綴，
+     卻會在 path.normalize 之後指到錄影檔 —— 等於整道門形同虛設。 */
+  const wanted=path.join(ROOT,path.normalize(u).replace(/^(\.\.[/\\])+/,''));
+  const inRec=(wanted===RECDIR||wanted.startsWith(RECDIR+path.sep));
+  if(inRec&&qs.get('k')!==TKEY){
+    res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'});
+    return res.end('需要教師金鑰才能存取錄影檔');
   }
-  if(u==='/recordings'||u==='/recordings/'){
+  if(wanted===RECDIR){
     let list=[];try{list=fs.readdirSync(RECDIR).filter(f=>f.endsWith('.json')).sort().reverse();}catch(e){}
     res.writeHead(200,{'Content-Type':MIME['.json']});return res.end(JSON.stringify(list));
   }
-  const p=path.join(ROOT,path.normalize(u).replace(/^(\.\.[/\\])+/,''));
+  const p=wanted;
   if(!p.startsWith(ROOT)){res.writeHead(403);return res.end('forbidden');}
   fs.readFile(p,(err,buf)=>{
     if(err){res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'});return res.end('找不到 '+u);}

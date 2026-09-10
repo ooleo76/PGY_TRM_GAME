@@ -47,20 +47,26 @@ body.mode-host #alm{width:96px;font-size:19px}
 body.mode-host #alm .sub{font-size:12px}
 
 /* ── 場地 ── */
-#field{flex:1;position:relative;min-height:0;background:#0D1319;--feedw:clamp(112px,30%,250px)}
-body.mode-host #field,body.mode-replay #field{--feedw:clamp(240px,30%,460px)}
+#field{flex:1;position:relative;min-height:0;background:#0D1319;
+ --feedw:clamp(112px,30%,250px); --recw:0px; --feedh:0px}
+body.mode-host #field,body.mode-replay #field{--feedw:clamp(230px,27%,430px)}
+/* 投影幕左邊那一欄是急救紀錄。v4.0.1：原本 #recbox 掛在 #app 底下（#app 沒有 position），
+   所以它是以視窗為基準定位、直接壓在病房畫面上。移進 #field 並讓畫布同時讓出左右兩欄。 */
+body.mode-host #field{--recw:clamp(230px,27%,430px)}
 /* item 2 / item 5：對話、order、系統訊息一律走右側同一條流，而且不覆蓋病房畫面 ——
    畫布本身讓出右邊那一欄，所以床右、電擊器、家屬永遠看得到。 */
 /* canvas 是 replaced element：width:auto 會用內建的 300x150，不會跟著 left/right 拉開，
    所以寬度要自己算出來。 */
-#cv{position:absolute;left:0;top:0;width:calc(100% - var(--feedw));height:100%}
+#cv{position:absolute;left:var(--recw);top:0;
+ width:calc(100% - var(--recw) - var(--feedw));height:calc(100% - var(--feedh))}
 #hud{position:absolute;left:9px;top:6px;font-family:var(--mono);pointer-events:none;z-index:3}
 #hud .t{font-size:21px;font-weight:500;color:#EAF2F8;line-height:1;text-shadow:0 2px 8px #000}
 #hud .s{font-size:10px;color:#9FB2C2;margin-top:3px;text-shadow:0 1px 4px #000}
 body.mode-host #hud .t{font-size:30px}body.mode-host #hud .s{font-size:13px}
 /* item 9：任何人回報／下令之後，其他人的病房畫面下方會出現「收到」，
    三秒內沒點就自己消失。點了會記一筆到報表。 */
-#roger{position:absolute;left:8px;right:calc(var(--feedw) + 8px);bottom:8px;z-index:7;
+#roger{position:absolute;left:calc(var(--recw) + 8px);right:calc(var(--feedw) + 8px);
+ bottom:calc(var(--feedh) + 8px);z-index:7;
  background:rgba(14,26,34,.96);border:1px solid #2F6C82;border-radius:11px;
  padding:8px 10px;display:none;align-items:center;gap:10px;
  box-shadow:0 6px 20px rgba(0,0,0,.5)}
@@ -72,10 +78,15 @@ body.mode-host #hud .t{font-size:30px}body.mode-host #hud .s{font-size:13px}
  background:#1B5E45;border-color:#2E8A67;border-radius:9px}
 #roger .bar{position:absolute;left:0;bottom:0;height:2px;background:#3FD0E8;border-radius:0 0 11px 11px}
 body.mode-host #roger,body.mode-teacher #roger,body.mode-replay #roger{display:none!important}
+/* v4.0.1（item 3）：最新的訊息在最下面，舊的往上推 —— 跟通訊軟體一樣。
+   用第一則訊息的 margin-top:auto 把內容頂到底部，比 justify-content:flex-end 安全
+   （後者在內容溢位時，某些瀏覽器會裁掉最上面而不是最下面）。 */
 #feed{position:absolute;right:0;top:0;bottom:0;width:var(--feedw);z-index:4;
  display:flex;flex-direction:column;gap:4px;overflow-y:auto;justify-content:flex-start;
  padding:6px 6px 6px 5px;background:#0A1016;border-left:1px solid var(--line);
- -webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
+ -webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;
+ scroll-behavior:smooth}
+#feed .f:first-of-type{margin-top:auto}
 #feed .f{background:rgba(18,30,40,.92);border-left:3px solid #3FD0E8;border-radius:6px;
  padding:5px 7px;font-size:12px;line-height:1.42;color:#D6E2EC;flex:none;word-break:break-word}
 body.mode-host #feed .f{font-size:20px;padding:9px 12px;line-height:1.45}
@@ -89,7 +100,7 @@ body.mode-host #feed .f{font-size:20px;padding:9px 12px;line-height:1.45}
  position:sticky;top:-6px;background:#0A1016;z-index:1}
 body.mode-host #feed .cap{font-size:14px}
 /* 病房畫面想看大一點的時候可以把這一欄收起來（只有學員端，投影幕不收） */
-#feedtog{position:absolute;right:0;top:0;z-index:6;min-width:0;min-height:0;
+#feedtog{position:absolute;right:var(--feedw);top:0;z-index:6;min-width:0;min-height:0;
  font-size:11px;padding:4px 7px;border-radius:0 0 0 8px;background:rgba(10,16,22,.9);
  border:1px solid var(--line);border-top:none;border-right:none;color:#8296A8}
 body.mode-host #feedtog,body.mode-teacher #feedtog,body.mode-replay #feedtog{display:none}
@@ -98,10 +109,11 @@ body.feed-off #feed{display:none}
 /* ── 紀錄表（只在投影幕左側）──
    內容全部是「已經發生過的事」，所以全隊都看得到也不會洩漏現在幾分幾秒。 */
 #recbox{display:none}
-body.mode-host #recbox{display:block;position:absolute;left:8px;top:54px;bottom:8px;
-  width:30%;max-width:430px;z-index:4;pointer-events:none;overflow:hidden}
-#recbox table{width:100%;border-collapse:collapse;background:rgba(10,18,26,.88);
-  border-radius:9px;overflow:hidden;font-size:16px}
+body.mode-host #recbox{display:block;position:absolute;left:0;top:0;bottom:0;
+  width:var(--recw);z-index:4;pointer-events:none;overflow-y:auto;
+  padding:6px 5px 6px 6px;background:#0A1016;border-right:1px solid var(--line)}
+#recbox table{width:100%;border-collapse:collapse;background:rgba(18,30,40,.92);
+  border-radius:9px;overflow:hidden;font-size:15px}
 #recbox th{background:rgba(63,208,232,.16);color:#8FE3F5;font-weight:600;
   padding:6px 8px;text-align:left;font-size:15px;letter-spacing:.5px}
 #recbox td{padding:6px 8px;border-top:1px solid rgba(255,255,255,.07);
@@ -112,11 +124,20 @@ body.mode-host #recbox{display:block;position:absolute;left:8px;top:54px;bottom:
 #feed .f.new{animation:slideIn .3s ease-out}
 #feed .f b{font-weight:700;margin-right:5px}
 @keyframes slideIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
-/* 窄螢幕：訊息流那一欄壓窄一點，字級也跟著縮，但位置不變 —— 學員不用學兩套版面 */
-@media (max-width:480px){
-  body.mode-player #field{--feedw:clamp(96px,32%,150px)}
-  #feed .f{font-size:10.5px;padding:4px 5px;line-height:1.35}
-  #feed .cap{font-size:9px}
+/* v4.0.1（item 1）：直立手機把訊息條移到病房與操作面板<b>中間</b>，只留最新兩筆。
+   這樣病房畫面可以用滿整個寬度 —— 學員盯的是投影幕，手機上的訊息只是輔助。 */
+@media (max-width:759px){
+  body.mode-player #field{--feedw:0px!important;--feedh:56px}
+  body.mode-player #feed{left:0;right:0;top:auto;bottom:0;width:auto;
+    height:var(--feedh);border-left:none;border-top:1px solid var(--line);
+    justify-content:flex-end;overflow:hidden;gap:3px;padding:3px 6px;scroll-behavior:auto}
+  body.mode-player #feed .cap{display:none}
+  body.mode-player #feed .f{font-size:11.5px;padding:3px 6px;line-height:1.35;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+    -webkit-line-clamp:1;-webkit-box-orient:vertical}
+  body.mode-player #feed .f:first-of-type{margin-top:0}
+  body.mode-player #feedtog{display:none}
+  body.feed-off #feed{display:flex}          /* 這個版面沒有收合的必要 */
 }
 @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .tb{position:absolute;top:6px;font-size:11px;padding:7px 9px;min-height:0;min-width:0;
@@ -146,7 +167,7 @@ body.mode-host #recbox{display:block;position:absolute;left:8px;top:54px;bottom:
 #youare .hd{font-size:12.5px;color:var(--dim)}
 #youare .hd b{color:#8FE3F5}
 #youare .me{font-size:13px;font-weight:700;padding:2px 9px;border-radius:7px;background:#1D2C38}
-#strip{position:absolute;left:8px;right:8px;top:44px;z-index:8;display:none;
+#strip{position:absolute;left:calc(var(--recw) + 8px);right:calc(var(--feedw) + 8px);top:44px;z-index:8;display:none;
  background:rgba(4,10,14,.96);border:1px solid #2E4450;border-radius:12px;padding:8px 10px 6px;
  box-shadow:0 8px 30px rgba(0,0,0,.6)}
 #strip.on{display:block}
@@ -158,7 +179,7 @@ body.mode-host #strip .sl b{font-size:22px}
 #cStrip{width:100%;height:104px;display:block}
 body.mode-host #cStrip{height:190px}
 /* item 8：接上 EtCO₂ 之後自己看波形 —— 呈現方式跟心律判讀一致，學員不用學兩套 */
-#tube{position:absolute;left:8px;right:calc(var(--feedw) + 8px);top:44px;z-index:8;display:none;
+#tube{position:absolute;left:calc(var(--recw) + 8px);right:calc(var(--feedw) + 8px);top:44px;z-index:8;display:none;
  background:rgba(4,10,14,.96);border:1px solid #6B5A2E;border-radius:12px;padding:8px 10px 6px;
  box-shadow:0 8px 30px rgba(0,0,0,.6)}
 #tube.on{display:block}
@@ -231,9 +252,11 @@ body.mode-host #who .w .b{font-size:14px}
 #gate h1{font-size:22px;font-weight:500;margin:0 0 6px;letter-spacing:.02em}
 #gate p{color:var(--dim);font-size:13.5px;line-height:1.65;margin:0 0 14px}
 #gate .lab{font-size:11px;letter-spacing:.12em;color:var(--dim);margin:20px 0 8px}
-#nameIn{width:100%;font-size:44px;text-align:center;padding:14px;border-radius:14px;
- background:#141C24;border:1px solid #34485A;color:#fff;font-family:var(--sans);letter-spacing:.3em}
-#nameIn:focus{outline:2px solid var(--cy)}
+#gate input{width:100%;font-size:26px;text-align:center;padding:14px;border-radius:14px;
+ background:#141C24;border:1px solid #34485A;color:#fff;font-family:var(--sans);
+ letter-spacing:.12em;-webkit-appearance:none;appearance:none}
+#gate input:focus{outline:2px solid var(--cy)}
+#nameIn{font-size:44px;letter-spacing:.3em}
 #slots{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 #slots button{min-height:76px;flex-direction:column;gap:4px;font-size:12px}
 #slots button .dot{width:22px;height:22px;border-radius:50%}
@@ -315,11 +338,9 @@ body.mode-player #who{display:none}
 body.mode-host #hud{display:none}   /* 投影幕不顯示急救經過時間 —— 那是紀錄者的資訊 */
 /* 直立手機：病房畫面高度跟著「畫布實際寬度」走（已經扣掉右邊訊息欄），
    所以病房不會被壓扁，訊息也不會蓋到床右。 */
+/* 直立手機：病房用滿整個寬度，下面再加一條 56px 的訊息帶 */
 body.mode-player #field{flex:0 0 auto;
-  height:min(46vh, calc((100vw - clamp(112px,30vw,250px)) * 0.867))}
-@media (max-width:480px){
-  body.mode-player #field{height:min(46vh, calc((100vw - clamp(96px,32vw,150px)) * 0.867))}
-}
+  height:min(56vh, calc(100vw * 0.867 + 56px))}
 body.mode-player #toast{top:auto;bottom:56px}
 body.mode-player #panel{flex:1;height:auto;min-height:0}
 /* item 5：橫向手機與 iPad —— 左邊病房、右邊操作面板，不再把面板擠成一條。 */
@@ -357,6 +378,7 @@ body.mode-replay #panel{display:none}
  </div>
  <div id="field">
   <canvas id="cv"></canvas>
+  <div id="recbox"></div>
   <div id="feed"></div>
   <button id="feedtog" title="收合／展開訊息欄">▶</button>
   <div id="roger"><span class="x" id="rogx"></span><button id="rogb">收到</button><i class="bar" id="rogbar"></i></div>
@@ -377,7 +399,6 @@ body.mode-replay #panel{display:none}
     <div class="sn" id="tubeN"></div>
   </div>
  </div>
- <div id="recbox"></div>
  <div id="who"></div>
  <div id="panel"><div id="youare"></div><div id="acts"></div></div>
  <div id="rp">
@@ -403,6 +424,8 @@ body.mode-replay #panel{display:none}
 <script>
 'use strict';
 const K=IHCA.K, RH=IHCA.RH, mmt=IHCA.mmt;
+/* 介面版本與引擎版本分開記。只改介面不影響重播相容性，所以 ENGINE 不進版。 */
+const UIVER='4.1.0';
 const $=id=>document.getElementById(id);
 const QS=new URLSearchParams(location.search);
 const isFile=location.protocol==='file:';
@@ -786,13 +809,14 @@ function paintRecs(){
   const box=$('recbox');if(!box)return;
   const rs=(G&&G.recs)?G.recs:[];
   if(!rs.length){box.innerHTML='<div class="cap">紀錄（還沒有人記錄）</div>';return;}
-  const show=rs.slice(-12);          /* 只留最近 12 筆，超過就往上捲掉 */
+  const show=rs.slice(-40);          /* 左欄可以捲，最新的在最下面 */
   let h='<div class="cap">急救紀錄　共 '+rs.length+' 筆</div><table><tr><th>時間</th>'
     +K.RECF.map(f=>'<th>'+f.n+'</th>').join('')+'</tr>';
   for(const e of show)
     h+='<tr><td class="t">'+mmt(e.t)+'</td>'
       +K.RECF.map(f=>e[f.k]?'<td>'+e[f.k]+'</td>':'<td class="e">·</td>').join('')+'</tr>';
-  box.innerHTML=h+'</table>';
+  if(box.innerHTML!==h+'</table>'){box.innerHTML=h+'</table>';
+    box.scrollTop=box.scrollHeight;}
 }
 function paintMonNums(){
   if(!G)return;
@@ -1345,6 +1369,13 @@ function paintWho(){
 /* ═══════════ 進場／大廳 ═══════════ */
 let gateName=localStorage.getItem('ihcaName')||'', gateSlot=localStorage.getItem('ihcaSlot')||'';
 let _lastGate='';
+/* 選取狀態用 class 同步，不進 HTML 字串 —— 見 paintGate 裡的說明 */
+function syncGateSel(){
+  const pg=$('pgys');
+  if(pg)[...pg.children].forEach(b=>b.classList.toggle('on',b.dataset.p===gatePgy));
+  const sl=$('slots');
+  if(sl)[...sl.children].forEach(b=>b.classList.toggle('on',b.dataset.id===gateSlot));
+}
 function paintGate(){
   const e=$('gate');
   if(DENIED==='room'&&MODE==='player'){
@@ -1403,32 +1434,47 @@ function paintGate(){
         $('reJoin').onclick=()=>{localStorage.removeItem('ihcaName');ME=null;_lastGate='';paintGate();};}
       return;
     }
+    /* v4.0.1（item 4）：這個畫面每收到一次快照（12Hz）就會重畫一次。
+       舊版把 gateName / gateEid / gatePgy 直接寫進 HTML 字串，
+       所以每打一個字字串就變、innerHTML 被換掉、輸入框失焦 → 鍵盤跳掉；
+       職級按鈕也會在 pointerdown 與 click 之間被換成新的節點 → 點不到。
+       解法：HTML 只放「結構」（誰上線了、有哪些位子），
+       使用者輸入的值與選取狀態一律用 DOM 操作同步，字串就不會再變。 */
     const html='<div class="inner"><h1>輸入一個字</h1>'
       +'<p>這個字就是你在畫面上的代號，全隊都看得到。可以是名字裡的一個字。</p>'
-      +'<input id="nameIn" maxlength="2" value="'+gateName.replace(/"/g,'')+'" placeholder="季">'
+      +'<input id="nameIn" maxlength="2" placeholder="季" autocomplete="off" '
+      +'autocapitalize="off" autocorrect="off">'
       +'<div class="lab">人事號</div>'
       +'<p style="margin:-4px 0 8px">只用來把你三場演練的紀錄串在一起，<b>不會顯示在任何畫面上</b>，'
       +'報表與錄影檔裡也只會存不可逆的代碼。</p>'
-      +'<input id="eidIn" maxlength="20" inputmode="latin" style="font-size:24px;letter-spacing:.12em" '
-      +'value="'+gateEid.replace(/"/g,'')+'" placeholder="A123456">'
+      +'<input id="eidIn" maxlength="20" placeholder="A123456" autocomplete="off" '
+      +'autocapitalize="characters" autocorrect="off" spellcheck="false" '
+      +'style="font-size:26px;letter-spacing:.12em">'
       +'<div class="lab">目前身分／年資</div>'
       +'<div id="pgys" style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">'
-      +PGYOPT.map(x=>'<button class="'+(gatePgy===x?'on':'')+'" data-p="'+x+'" '
-        +'style="min-height:46px;font-size:13px">'+x+'</button>').join('')+'</div>'
+      +PGYOPT.map(x=>'<button data-p="'+x+'" style="min-height:46px;font-size:13px">'+x+'</button>').join('')
+      +'</div>'
       +'<div class="lab">選一個顏色</div><div id="slots">'
-      +taken.map(s2=>'<button class="'+(gateSlot===s2.id?'on ':'')+(s2.online?'taken':'')+'" data-id="'+s2.id+'"'
+      +taken.map(s2=>'<button class="'+(s2.online?'taken':'')+'" data-id="'+s2.id+'"'
         +(s2.online?' disabled':'')+'>'
         +'<span class="dot" style="background:'+s2.c+'"></span>'
         +(s2.online?(s2.name||s2.id.toUpperCase()):'空位')+'</button>').join('')+'</div>'
       +'<div style="margin-top:22px"><button class="go" style="width:100%;min-height:58px;font-size:16px" id="joinBtn">進入</button></div>'
       +'</div>';
-    if(html!==_lastGate){_lastGate=html;e.innerHTML=html;
+    if(html!==_lastGate){
+      /* 位子狀態變了還是得重畫（有人進場）—— 但要把游標與已經打的字接回去 */
+      const focusId=document.activeElement?document.activeElement.id:null;
+      _lastGate=html;e.innerHTML=html;
+      $('nameIn').value=gateName; $('eidIn').value=gateEid;
+      if(focusId==='nameIn'||focusId==='eidIn'){
+        const el2=$(focusId);
+        try{el2.focus({preventScroll:true});el2.setSelectionRange(el2.value.length,el2.value.length);}
+        catch(_){}
+      }
       $('nameIn').oninput=ev=>{gateName=ev.target.value.trim();};
-      $('eidIn').oninput=ev=>{gateEid=ev.target.value.trim();};
-      [...$('pgys').children].forEach(b=>b.onclick=()=>{gatePgy=b.dataset.p;
-        [...$('pgys').children].forEach(x=>x.classList.remove('on'));b.classList.add('on');});
-      [...$('slots').children].forEach(b=>b.onclick=()=>{gateSlot=b.dataset.id;
-        [...$('slots').children].forEach(x=>x.classList.remove('on'));b.classList.add('on');});
+      $('eidIn').oninput=ev=>{gateEid=ev.target.value.trim().toUpperCase();};
+      [...$('pgys').children].forEach(b=>b.onclick=()=>{gatePgy=b.dataset.p;syncGateSel();buzz(8);});
+      [...$('slots').children].forEach(b=>b.onclick=()=>{gateSlot=b.dataset.id;syncGateSel();buzz(8);});
       $('joinBtn').onclick=()=>{
         const nm=(gateName||'').trim();
         if(!nm){$('nameIn').focus();return;}
@@ -1441,6 +1487,7 @@ function paintGate(){
         NET.send({t:'hello',role:'player',name:nm,slot:gateSlot||'',
           room:ROOM,join:JOIN,eid:gateEid,pgy:gatePgy});
       };}
+    syncGateSel();          /* 每次都同步選取狀態，但不去碰輸入框的值 */
     return;
   }
   if(MODE==='host'){
@@ -1562,7 +1609,8 @@ function paintTC(){
        ?'<b style="color:#6FE0A6">匿名模式：開</b> — 錄影檔只存 P1…P6 與人事號的不可逆代碼。'
        :'<b style="color:#E8A33D">匿名模式：關</b> — 錄影檔會存學員的字與人事號。'
         +'正式收資料前請在後台設 <code>ANON=1</code> 與 <code>ANON_SALT</code>。')
-   +'　本次已經跑了第 '+(LOBBY.sessionIndex||0)+' 場。</p>'
+   +'　本次已經跑了第 '+(LOBBY.sessionIndex||0)+' 場。<br>'
+   +'引擎 <b>'+IHCA.ENGINE+'</b>（決定錄影檔相容性）　介面 <b>'+UIVER+'</b>（只改介面時才動）</p>'
    +'<h2>其他畫面</h2><p class="note">主機投影：'+location.origin+'/?m=host&k='+TKEY+'<br>'
    +'重播播放器：'+location.origin+'/?m=replay&k='+TKEY+'</p>'
    +'</div>';
@@ -1980,22 +2028,36 @@ function paint(){
   if(!G)return;
   paintWho();
 
-  /* item 2：order、對話、系統提示全部走同一條右側訊息流，字級一律相同。
-     item 5：所有裝置都用這一條 —— 直立手機也不再只看得到兩則。
-     最新的在最上面，容器可以往下捲看更早的。 */
-  const fh='<div class="cap">現場對話與指令</div>'+G.feed.map(f=>
-    '<div class="f'+(f.kind&&f.kind!=='say'?' '+f.kind:'')+'" data-k="'+f.at+f.n+'">'
-    +'<b style="color:'+f.col+'">'+f.n+'</b>'+f.txt+'</div>').join('');
+  /* item 2：order、對話、系統提示全部走同一條訊息流，字級一律相同。
+     v4.0.1（item 3）：最新的在<b>最下面</b>，舊的往上推。
+     v4.0.1（item 1）：直立手機只留最新兩筆，而且改放在病房與操作面板中間。 */
+  const strip=feedStrip();
+  const src=strip?G.feed.slice(0,2):G.feed;
+  const fh=(strip?'':'<div class="cap">現場對話與指令</div>')
+    +src.slice().reverse().map(f=>
+      '<div class="f'+(f.kind&&f.kind!=='say'?' '+f.kind:'')+'" data-k="'+f.at+f.n+'">'
+      +'<b style="color:'+f.col+'">'+f.n+'</b>'+f.txt+'</div>').join('');
   if(fh!==_lastFeedH){
     const el=$('feed');
     const seen=new Set([...el.children].map(x=>x.dataset.k));
     _lastFeedH=fh; el.innerHTML=fh;
-    [...el.children].forEach(x=>{if(x.dataset.k&&!seen.has(x.dataset.k))x.classList.add('new');});}
+    [...el.children].forEach(x=>{if(x.dataset.k&&!seen.has(x.dataset.k))x.classList.add('new');});
+    if(!strip)el.scrollTop=el.scrollHeight;}
   paintRoger();
   if(MODE==='player'||SOLO){paintYouAre();buildPanel();}
   if(G.over&&(SOLO||REPLAY)&&!HIST){HIST=IHCA.history(SOLO?LOCAL:RP.finalG);renderSheet();}
   if(G.over&&!SOLO&&!REPLAY&&!HIST&&!_askedHist){_askedHist=1;NET.send({t:'history'});}
 }
+
+/* 直立手機（含小平板直立）＝訊息條模式：只留兩筆、放在病房與操作面板中間 */
+let _stripMQ=null;
+function feedStrip(){
+  if(MODE!=='player'&&!SOLO)return false;
+  if(!_stripMQ)_stripMQ=window.matchMedia('(max-width:759px)');
+  return _stripMQ.matches;
+}
+/* 換方向／轉螢幕時要重畫一次，否則會卡在舊的筆數 */
+window.addEventListener('resize',()=>{_lastFeedH='';_rc=null;});
 
 /* item 9：畫面下方的「收到」。三秒內沒點就消失 —— 不強迫，但看得到誰有回應。 */
 let _rogId=null;

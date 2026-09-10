@@ -11,7 +11,7 @@ const HZ=30, DT=1/HZ;
 
 /* 引擎版本 — 只要改動任何會影響模擬結果的邏輯就要進版。
    錄影檔記錄產生它的引擎版本，版本不同就不能忠實重播。 */
-const ENGINE='4.0.0';
+const ENGINE='4.1.0';
 
 /* ═══════════ 常數 ═══════════ */
 const K={
@@ -69,6 +69,11 @@ CCF_K2:7.5,       /* 40–60% 之間的斜率（陡） */
    照規矩做的停頓。這是刻意的模型選擇，論文的 Methods 要寫清楚。 */
 NOFLOW_SOFT:180,
 NOFLOW_MAX:420,
+/* 灌流債的上限。沒有上限的話，長時間不壓胸會讓 decay 累積到幾百，
+   等於多出一條沒有寫在文件裡的不可逆通道；有上限之後，
+   「回不來」這件事只由 K.NOFLOW_MAX 一個參數決定，論文比較好交代。
+   校準腳本的最長中斷只有十幾秒，加上限完全不影響既有的校準結果。 */
+DECAYMAX:180,
 /* 心律對「回得來的難度」的乘數。真實 IHCA 的方向是可電擊優於不可電擊
    （US NIS 1998–2018 出院存活：可電擊 29.8→39.7%、不可電擊 18.9→30.2%），
    v3.4 的引擎剛好相反 —— asystole 是最好打的一格。 */
@@ -315,7 +320,7 @@ function newState(seed,setup){
     ccfPen:0, rhyPen:0, harmPen:0,
     /* 醫源性併發症與無指徵處置 */
     iatroPtx:false, iatroPtxAt:null, iatroPtxFixed:false, iatroPeri:false,
-    badCalc:0, badBicarb:0, badLytic:0, badFluidDrug:0, blindProc:0, harmMult:1,
+    badCalc:0, badBicarb:0, badLytic:0, badFluidDrug:0, blindProc:0, harmMult:1, harmFlat:0,
     harmLog:[],
     decay:0,decays:0,
     rosc:false,roscAt:null,roscFelt:false,roscKnown:false,roscKnownAt:null,roscHint:0,
@@ -534,10 +539,11 @@ function ettFail(sp){return sp&&sp.scope==='Video'?.05:.10;}
 /* 醫源性傷害登記 —— 報表與論文都用這一份。
    mult：把「還要撐多久才回得來」整體拉長的倍率（上限 ×2.6）
    dRate：額外的灌流債速率（每秒），until=null 代表不會消失 */
-function harm(kind,txt,mult,dRate,secs){
-  S.harmLog.push({t:S.t,kind,txt,mult:mult||1,dRate:dRate||0,
+function harm(kind,txt,mult,dRate,secs,flat){
+  S.harmLog.push({t:S.t,kind,txt,mult:mult||1,dRate:dRate||0,flat:flat===undefined?25:flat,
     until:(secs===undefined||secs===null)?null:S.t+secs});
   if(mult&&mult>1)S.harmMult=Math.min(2.6,S.harmMult*mult);
+  S.harmFlat=Math.min(150,(S.harmFlat||0)+(flat===undefined?25:flat));
   say('⚠ '+txt);tl(txt,'key');
   push2feedSys(txt);
 }
@@ -1175,7 +1181,8 @@ function step(){
     const q=(on&&cc)?Math.max(.15,1-cc.fat*.62)*(S.air==='ETT'?1:.9):0;
     const epiBoost=(S.t-S.epiT<240)?1.20:1.0;
     /* 醫源性傷害會持續扣灌流（醫源性氣胸、心包積血、經驗性 calcium…） */
-    S.decay=Math.max(0,S.decay+dt*((on?-0.55*q*epiBoost:0.62)+harmDecay()));
+    S.decay=Math.min(K.DECAYMAX,
+      Math.max(0,S.decay+dt*((on?-0.55*q*epiBoost:0.62)+harmDecay())));
     if(!S.fixed&&S.decay>=(S.rhythm==='pVT'?60:105)){
       const nx=S.rhythm==='pVT'?'VF':(S.rhythm==='VF'||S.rhythm==='PEA')?'asystole':null;
       if(nx){S.rhythm=nx;S.decays++;S.decay=30;
@@ -1202,8 +1209,8 @@ function step(){
     /* 累積 no-flow 的代價：超過 SOFT 之後線性拉長要撐的時間，到 MAX 完全回不來 */
     const nf=Math.max(0,Math.min(1,(S.noFlow-K.NOFLOW_SOFT)/(K.NOFLOW_MAX-K.NOFLOW_SOFT)));
     S.nfMult=1+2*nf;
-    S.roscNeed=base*S.harmMult*S.nfMult;
-    S.harmPen=base*(S.harmMult-1);
+    S.roscNeed=base*S.harmMult*S.nfMult+S.harmFlat;
+    S.harmPen=base*(S.harmMult-1)+S.harmFlat;
     S.nfPen=base*S.harmMult*(S.nfMult-1);
     if(!blocked&&cc>=K.CCF_FLOOR){
       S.roscProgress+=dt/(pen*rm);
