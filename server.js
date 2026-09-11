@@ -48,6 +48,20 @@ function serve(req,res){
      v4.0.1：驗證改用「正規化之後的實際路徑」，不是使用者給的字串。
      只比對字串的話，/x/../recordings/xxx.json 這種寫法不會命中 /recordings 前綴，
      卻會在 path.normalize 之後指到錄影檔 —— 等於整道門形同虛設。 */
+  /* 統計匯出也算錄影檔資料，一樣要教師金鑰 */
+  if(u==='/export.csv'||u==='/export-persons.csv'){
+    if(qs.get('k')!==TKEY){res.writeHead(403,{'Content-Type':'text/plain; charset=utf-8'});
+      return res.end('需要教師金鑰');}
+    let body='';
+    try{body=(u==='/export.csv')?exportSessions():exportPersons();}
+    catch(e){body='﻿匯出失敗,'+String(e.message)+'\n';}
+    const d=new Date(),z=x=>String(x).padStart(2,'0');
+    const fn='IHCA_'+(u==='/export.csv'?'sessions':'persons')+'_'
+      +d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'.csv';
+    res.writeHead(200,{'Content-Type':'text/csv; charset=utf-8',
+      'Content-Disposition':'attachment; filename="'+fn+'"'});
+    return res.end(body);
+  }
   const wanted=path.join(ROOT,path.normalize(u).replace(/^(\.\.[/\\])+/,''));
   const inRec=(wanted===RECDIR||wanted.startsWith(RECDIR+path.sep));
   if(inRec&&qs.get('k')!==TKEY){
@@ -65,6 +79,67 @@ function serve(req,res){
     res.writeHead(200,{'Content-Type':MIME[path.extname(p)]||'application/octet-stream',
       'Cache-Control':'no-cache'});
     res.end(buf);});
+}
+/* ══ v4.3（item 5）統計匯出 ══
+   把 recordings/ 裡的每一份錄影重跑一次，壓成一列數字。
+   錄影檔記的是「種子 + 每一個操作」，所以重跑出來的結果與當場一模一樣 ——
+   這也是為什麼引擎版本一定要凍結：版本不同，同一份檔案會算出不一樣的一局。 */
+function replayFile(name){
+  const raw=JSON.parse(fs.readFileSync(path.join(RECDIR,name),'utf8'));
+  if(raw.kind==='familiarization')return null;
+  if(raw.engine!==SIM.ENGINE)return {name,skip:'引擎版本 '+(raw.engine||'?')+'，本版是 '+SIM.ENGINE};
+  let G=SIM.newState(raw.seed,raw.setup),qi=0;
+  const ev=raw.events||[];
+  for(let i=0;i<SIM.HZ*1300;i++){
+    while(qi<ev.length&&ev[qi].k<=G.tick){const e=ev[qi++];SIM.applyAct(G,e.c,e.a,e.p);}
+    SIM.use(G);SIM.step();
+    if(G.over)break;}
+  return {name,raw,G};
+}
+function allRecordings(){
+  let list=[];try{list=fs.readdirSync(RECDIR).filter(f=>f.endsWith('.json')).sort();}catch(e){}
+  const out=[];
+  for(const f of list){
+    try{const r=replayFile(f);if(r)out.push(r);}
+    catch(e){out.push({name:f,skip:'讀取失敗：'+e.message});}}
+  return out;
+}
+const csvCell=v=>{if(v===null||v===undefined)return '';
+  const t=String(v);return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;};
+function toCsv(rows){
+  if(!rows.length)return '﻿（沒有可以匯出的錄影檔）\n';
+  const keys=[];for(const r of rows)for(const k in r)if(keys.indexOf(k)<0)keys.push(k);
+  return '﻿'+keys.join(',')+'\n'
+    +rows.map(r=>keys.map(k=>csvCell(r[k])).join(',')).join('\n')+'\n';
+}
+function exportSessions(){
+  const rows=[];
+  for(const r of allRecordings()){
+    if(r.skip){rows.push({file:r.name,note:r.skip});continue;}
+    const m=SIM.metricsRow(r.G);
+    rows.push(Object.assign({file:r.name, endedAt:r.raw.endedAt||'',
+      sessionIndex:r.raw.sessionIndex||'', room:r.raw.room||'',
+      anon:r.raw.anon?1:0,
+      familiarizationAllDone:(r.raw.familiarization&&r.raw.familiarization.allDoneAt!==null&&
+        r.raw.familiarization.allDoneAt!==undefined)?r.raw.familiarization.allDoneAt:'',
+      familiarizationAge:(r.raw.familiarizationAge===null||r.raw.familiarizationAge===undefined)
+        ?'':r.raw.familiarizationAge},m));}
+  return toCsv(rows);
+}
+function exportPersons(){
+  const rows=[];
+  for(const r of allRecordings()){
+    if(r.skip)continue;
+    const per=SIM.perPerson(r.G), m=SIM.metricsRow(r.G);
+    const ros=(r.raw.roster||[]);
+    for(const p of per){
+      const meta=ros.find(x=>x.slot===p.id)||{};
+      rows.push({file:r.name, endedAt:r.raw.endedAt||'', sessionIndex:r.raw.sessionIndex||'',
+        cause:m.cause, rhythm0:m.rhythm0, outcome:m.outcome, teamCcf:m.ccfUtstein,
+        slot:p.id, code:meta.code||meta.name||p.n, pid:meta.pid||'',
+        eid:meta.eid||'', pgy:meta.pgy||'', visit:meta.visit||'',
+        wasLeader:p.lead?1:0, cprSec:p.cpr, jobs:p.jobs, said:p.said, metres:p.dist});}}
+  return toCsv(rows);
 }
 const server=http.createServer(serve);
 
@@ -228,12 +303,17 @@ function saveRecording(){
     /* 信件內文直接放報表全文 —— 就算附件之後不見了，結論還在信箱裡 */
     let txt='';
     try{txt=SIM.reportText(R.G);}catch(e){txt='（報表產生失敗）';}
+    /* 信裡順便附上這一場壓成一列的統計資料 —— 直接複製貼進 Excel 就能累積 */
+    let csv1='';
+    try{csv1=toCsv([Object.assign({file:name,endedAt:rec.endedAt,
+      sessionIndex:rec.sessionIndex},SIM.metricsRow(R.G))]);}catch(e){}
     mailOut('演練錄影 · '+rec.cause,name,json,
       '結果：'+(rec.over==='ROSC'?'ROSC':'未恢復循環')+'　時長：'+Math.round(rec.dur/60)+' 分\n'
       +'熟悉環境：'+(rec.familiarization
           ?(rec.familiarization.allDoneAt!==null?'全員完成 '+rec.familiarization.allDoneAt+' 秒':'未全員完成')
           :'（這一場沒有做）')
-      +'\n\n'+'─'.repeat(40)+'\n'+txt);
+      +'\n\n'+'─'.repeat(40)+'\n'+txt
+      +(csv1?('\n\n'+'─'.repeat(40)+'\n【這一場的統計列（CSV，可以直接貼進 Excel）】\n'+csv1):''));
   }catch(e){console.error(e);}
   return name;
 }
@@ -369,7 +449,18 @@ function onMsg(ws,m){
   if(m.t==='speed'){ R.speed=Math.max(1,Math.min(3,Number(m.v)||1)); pushLobby(); return;}
   if(m.t==='stop'){ if(!R.G.over){doAct(null,'__stop');saveRecording();} pushLobby(); return;}
   if(m.t==='newgame'){ const drill=R.lastDrill;
-    newRound(m.setup||R.setup); R.lastDrill=drill; pushLobby();
+    /* v4.3（item 9）：把所有學員退回輸入畫面。
+       名字、人事號、年資都留在他們手機的 localStorage 裡，重打很快，
+       但「第幾次參加」會被清掉 —— 這一題每一場都要重新回答。 */
+    const back=[];
+    for(const k in R.slots){
+      if(R.slots[k]&&R.slots[k].ws)back.push(R.slots[k].ws);
+      R.slots[k]=null;}
+    newRound(Object.assign({},m.setup||R.setup,{names:{}}));
+    R.setup.names={}; R.lastDrill=drill;
+    for(const w of back){w.meta.slot=null;
+      send(w,{t:'welcome',role:'player',slot:null,room:ROOM,join:JOIN,serverTime:Date.now()});}
+    pushLobby();
     broadcast(w=>({t:'snap',s:SIM.snapshotFor(R.G,w.meta.slot||null)})); return;}
   if(m.t==='history'){ send(ws,{t:'history',h:SIM.history(R.G)}); return;}
   /* 手動補寄最近一次的存檔（網路斷過、或想再寄一份給共同主持人時用） */
